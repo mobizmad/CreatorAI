@@ -4,7 +4,7 @@
 
 AgentBuilder is a SaaS platform that empowers non-technical users to create their own custom AI agents powered by LLMs. Upload your knowledge base, chat with your agent, and improve it through corrections that are automatically learned.
 
-![AgentBuilder](https://via.placeholder.com/800x400?text=AgentBuilder+Platform)
+<img src="https://github.com/user-attachments/assets/0d0fc5d0-f46b-4c08-b2ae-4f3df2821cf8" alt="Aung's Avatar" width="100" height="100"/>
 
 ## Features
 
