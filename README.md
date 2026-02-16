@@ -593,7 +593,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Documentation**: [docs.agentbuilder.com](https://docs.agentbuilder.com)
 - **Issues**: [GitHub Issues](https://github.com/yourusername/agentbuilder/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/agentbuilder/discussions)
-- **Email**: support@agentbuilder.com
+- **Email**: aungkpp.dev@gmail.com
 
 ---
 
