@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, AlertCircle } from 'lucide-react';
+import { Send, Loader2, AlertCircle, Plus, MessageSquare, Trash2, Brain } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import type { ChatLog, Source } from '@/lib/types';
+import type { Source } from '@/lib/types';
 
 interface ChatInterfaceProps {
   agentId: string;
@@ -16,11 +16,23 @@ interface Message {
   sources?: Source[];
 }
 
+interface Session {
+  id: string;
+  title: string;
+  created_at: string;
+  last_message_at: string;
+  message_count: number;
+}
+
 export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -31,6 +43,94 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    fetchSessions();
+  }, [agentId]);
+
+  const fetchSessions = async () => {
+    setIsLoadingSessions(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat/sessions`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch sessions:', err);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
+
+  const startNewSession = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
+    setError(null);
+  };
+
+  const loadSession = async (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat/sessions/${sessionId}/messages`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const loadedMessages: Message[] = [];
+        for (const log of data) {
+          loadedMessages.push({ role: 'user', content: log.user_message });
+          loadedMessages.push({
+            role: 'assistant',
+            content: log.agent_response,
+            sources: log.sources?.sources || [],
+          });
+        }
+        setMessages(loadedMessages);
+      }
+    } catch (err) {
+      console.error('Failed to load session:', err);
+    }
+  };
+
+  const deleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Delete this conversation?')) return;
+
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat/sessions/${sessionId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+
+      setSessions(sessions.filter((s) => s.id !== sessionId));
+      if (currentSessionId === sessionId) {
+        startNewSession();
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -38,7 +138,6 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     setInput('');
     setError(null);
 
-    // Add user message
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
@@ -51,17 +150,28 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
             'Content-Type': 'application/json',
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
-          body: JSON.stringify({ message: userMessage }),
+          body: JSON.stringify({
+            message: userMessage,
+            // Pass session_id if memory is enabled and we have a session
+            session_id: memoryEnabled ? currentSessionId : null,
+          }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
+      if (!response.ok) throw new Error('Failed to send message');
 
       const data = await response.json();
 
-      // Add assistant message
+      // Save the session_id returned from backend
+      if (data.session_id && !currentSessionId) {
+        setCurrentSessionId(data.session_id);
+        // Refresh sessions list to show the new one
+        fetchSessions();
+      } else if (data.session_id) {
+        // Update session title in sidebar after first message
+        fetchSessions();
+      }
+
       setMessages((prev) => [
         ...prev,
         {
@@ -85,109 +195,212 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center text-gray-500 mt-8">
-            <p className="text-lg">Start a conversation with your agent</p>
-            <p className="text-sm mt-2">Ask questions about your knowledge base</p>
-          </div>
-        )}
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div className="flex h-full bg-white rounded-lg shadow overflow-hidden">
+
+      {/* ── Sidebar: Conversation History ── */}
+      <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50">
+        {/* Sidebar header */}
+        <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-700">Conversations</span>
+          <button
+            onClick={startNewSession}
+            className="p-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+            title="New conversation"
           >
-            <div
-              className={`max-w-[80%] rounded-lg p-4 ${
-                message.role === 'user'
-                  ? 'bg-primary-500 text-white'
-                  : 'bg-gray-100 text-gray-900'
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Memory toggle */}
+        <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2">
+          <Brain className="w-4 h-4 text-purple-500" />
+          <span className="text-xs text-gray-600 flex-1">Memory</span>
+            <button
+              onClick={() => setMemoryEnabled(!memoryEnabled)}
+              className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
+                memoryEnabled ? 'bg-purple-500' : 'bg-gray-300'
               }`}
             >
-              <div className="prose prose-sm max-w-none">
-                {message.role === 'assistant' ? (
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
-                ) : (
-                  <p>{message.content}</p>
-                )}
-              </div>
+              <span
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${
+                  memoryEnabled ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+        </div>
 
-              {/* Sources */}
-              {message.sources && message.sources.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-xs font-semibold mb-2">Sources:</p>
-                  {message.sources.map((source, idx) => (
-                    <div key={idx} className="text-xs mb-1">
-                      <span className="font-medium">{source.source}</span>:{' '}
-                      {source.text}
-                    </div>
-                  ))}
+        {/* Sessions list */}
+        <div className="flex-1 overflow-y-auto">
+          {isLoadingSessions ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="text-center p-4 text-gray-400 text-xs">
+              No conversations yet
+            </div>
+          ) : (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                onClick={() => loadSession(session.id)}
+                className={`group flex items-start gap-2 p-3 cursor-pointer border-b border-gray-100 hover:bg-white transition-colors ${
+                  currentSessionId === session.id ? 'bg-white border-l-2 border-l-primary-500' : ''
+                }`}
+              >
+                <MessageSquare className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-800 truncate">
+                    {session.title || 'New Conversation'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {formatTime(session.last_message_at)} · {session.message_count} msgs
+                  </p>
                 </div>
-              )}
-
-              {/* Correct button */}
-              {message.role === 'assistant' && onCorrect && (
                 <button
-                  onClick={() => {
-                    const userMsg = messages[index - 1]?.content || '';
-                    onCorrect(userMsg, message.content);
-                  }}
-                  className="mt-2 text-xs underline hover:text-primary-600"
+                  onClick={(e) => deleteSession(session.id, e)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 rounded"
                 >
-                  Correct this response
+                  <Trash2 className="w-3 h-3" />
                 </button>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-lg p-4">
-              <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            <AlertCircle className="w-5 h-5" />
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="border-t p-4">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask your agent a question..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            disabled={isLoading}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-            className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </button>
+      {/* ── Main Chat Area ── */}
+      <div className="flex-1 flex flex-col">
+
+        {/* Memory indicator */}
+        {memoryEnabled && currentSessionId && (
+          <div className="px-4 py-1.5 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+            <Brain className="w-3.5 h-3.5 text-purple-500" />
+            <span className="text-xs text-purple-700">
+              Memory active — agent remembers this conversation
+            </span>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-gray-500 mt-8">
+              <p className="text-lg">Start a conversation with your agent</p>
+              <p className="text-sm mt-2">Ask questions about your knowledge base</p>
+              {memoryEnabled && (
+                <p className="text-xs mt-2 text-purple-500 flex items-center justify-center gap-1">
+                  <Brain className="w-3 h-3" />
+                  Memory is on — the agent will remember this chat
+                </p>
+              )}
+            </div>
+          )}
+
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-lg p-4 ${
+                  message.role === 'user'
+                    ? 'bg-primary-500 text-white'
+                    : 'bg-gray-100 text-gray-900'
+                }`}
+              >
+                <div className="prose prose-sm max-w-none">
+                  {message.role === 'assistant' ? (
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  ) : (
+                    <p>{message.content}</p>
+                  )}
+                </div>
+
+                {/* Sources */}
+                {message.sources && message.sources.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-xs font-semibold mb-2">Sources:</p>
+                    {message.sources.map((source, idx) => (
+                      <div key={idx} className="text-xs mb-1">
+                        <span className="font-medium">{source.source}</span>:{' '}
+                        {source.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Correct button */}
+                {message.role === 'assistant' && onCorrect && (
+                  <button
+                    onClick={() => {
+                      const userMsg = messages[index - 1]?.content || '';
+                      onCorrect(userMsg, message.content);
+                    }}
+                    className="mt-2 text-xs underline hover:text-primary-600"
+                  >
+                    Correct this response
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 rounded-lg p-4">
+                <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <p className="text-sm">{error}</p>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t p-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask your agent a question..."
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={isLoading}
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim()}
+              className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

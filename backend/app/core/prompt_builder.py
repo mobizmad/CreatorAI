@@ -17,17 +17,23 @@ You have been trained on specific knowledge provided by your creator. Your prima
    - Do not make up information or hallucinate facts
    - If you're uncertain, express your uncertainty
 
-3. **Learning from Corrections**
+3. **Conversation Awareness**
+   - You have access to the conversation history below
+   - Use it to understand context, follow-up questions, and references like "it", "that", "the same one"
+   - If the user refers to something mentioned earlier, use that context
+   - Maintain a consistent, friendly tone throughout the conversation
+
+4. **Learning from Corrections**
    - Pay special attention to the "Previous Corrections" section below
    - These are examples where you previously made mistakes that were corrected by your creator
    - Avoid repeating these mistakes in future responses
 
-4. **Concise & Clear Communication**
+5. **Concise & Clear Communication**
    - Provide clear, well-structured answers
    - Be concise but thorough
    - Use bullet points or numbered lists when appropriate
 
-5. **Stay in Scope**
+6. **Stay in Scope**
    - Focus on answering questions related to your knowledge base
    - Politely redirect off-topic questions
 
@@ -46,16 +52,8 @@ def build_system_prompt(
     few_shot_examples: List[Dict],
 ) -> str:
     """
-    Build the complete system prompt with dynamic sections
-
-    Args:
-        base_prompt: Base AgentBuilder prompt or custom system prompt
-        custom_instructions: User's custom instructions
-        retrieved_docs: Retrieved document chunks from RAG
-        few_shot_examples: Correction examples for few-shot learning
-
-    Returns:
-        Complete system prompt
+    Build the complete system prompt with dynamic sections.
+    Note: conversation history is passed as actual messages, not in system prompt.
     """
     prompt_parts = []
 
@@ -89,24 +87,51 @@ def build_system_prompt(
         for i, example in enumerate(few_shot_examples, 1):
             prompt_parts.append(f"**Example {i}:**\n")
             prompt_parts.append(f"User Query: {example['user_query']}\n")
-            prompt_parts.append(
-                f"Your Incorrect Response: {example['incorrect_response']}\n"
-            )
-            prompt_parts.append(
-                f"Correct Response: {example['corrected_response']}\n\n"
-            )
+            prompt_parts.append(f"Your Incorrect Response: {example['incorrect_response']}\n")
+            prompt_parts.append(f"Correct Response: {example['corrected_response']}\n\n")
 
     prompt_parts.append(
-        "\n---\n\nNow, please answer the following question based on the guidelines and knowledge provided above.\n"
+        "\n---\n\nNow, please answer the following question based on the guidelines, knowledge, and conversation history provided.\n"
     )
 
     return "".join(prompt_parts)
 
 
-def format_messages_for_llm(
-    system_prompt: str, user_message: str
+def format_messages_with_history(
+    system_prompt: str,
+    conversation_history: List[Dict],
+    user_message: str,
 ) -> List[Dict[str, str]]:
-    """Format messages in the structure required by LLMs"""
+    """
+    NEW: Format messages with full conversation history for memory.
+
+    Structure sent to LLM:
+    [
+        {"role": "system", "content": "..."},   <- system prompt
+        {"role": "user", "content": "..."},     <- past message 1
+        {"role": "assistant", "content": "..."}, <- past response 1
+        {"role": "user", "content": "..."},     <- past message 2
+        {"role": "assistant", "content": "..."}, <- past response 2
+        ...
+        {"role": "user", "content": "..."},     <- CURRENT message (latest)
+    ]
+    """
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history (already in [user, assistant, user, assistant...] format)
+    messages.extend(conversation_history)
+
+    # Add current user message
+    messages.append({"role": "user", "content": user_message})
+
+    return messages
+
+
+def format_messages_for_llm(
+    system_prompt: str,
+    user_message: str,
+) -> List[Dict[str, str]]:
+    """Original single-turn format (kept for backwards compatibility)"""
     return [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_message},

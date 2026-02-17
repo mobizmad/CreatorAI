@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.services.llm_gateway import LLMGateway
 from app.services.vector_store import VectorStoreService
-from app.core.prompt_builder import build_system_prompt, format_messages_for_llm
-from app.models.models import Agent, Correction
+from app.core.prompt_builder import build_system_prompt, format_messages_with_history
+from app.models.models import Agent, Correction, ChatLog, ConversationSession
 
 
 class AgentState(TypedDict):
     """State object passed between nodes in the graph"""
-
     query: str
+    conversation_history: List[Dict]   # NEW: past messages in this session
     retrieved_docs: List[Dict]
     few_shot_examples: List[Dict]
     system_prompt: str
@@ -21,7 +21,8 @@ class AgentState(TypedDict):
 
 class AgentExecutor:
     """
-    LangGraph-based agent executor with RAG and few-shot learning
+    LangGraph-based agent executor with RAG, few-shot learning,
+    and conversation memory.
     """
 
     def __init__(
@@ -29,10 +30,12 @@ class AgentExecutor:
         agent_id: str,
         db: Session,
         vector_store: VectorStoreService,
+        session_id: Optional[str] = None,   # NEW: pass session to load history
     ):
         self.agent_id = agent_id
         self.db = db
         self.vector_store = vector_store
+        self.session_id = session_id         # NEW
 
         # Load agent configuration
         self.agent = self._load_agent()
@@ -63,17 +66,57 @@ class AgentExecutor:
         workflow = StateGraph(AgentState)
 
         # Add nodes
+        workflow.add_node("load_history", self.load_history)         # NEW first node
         workflow.add_node("retrieve_knowledge", self.retrieve_knowledge)
         workflow.add_node("load_corrections", self.load_corrections)
         workflow.add_node("generate_response", self.generate_response)
 
         # Define edges
-        workflow.set_entry_point("retrieve_knowledge")
+        workflow.set_entry_point("load_history")                     # NEW entry point
+        workflow.add_edge("load_history", "retrieve_knowledge")
         workflow.add_edge("retrieve_knowledge", "load_corrections")
         workflow.add_edge("load_corrections", "generate_response")
         workflow.add_edge("generate_response", END)
 
         return workflow.compile()
+
+    async def load_history(self, state: AgentState) -> AgentState:
+        """
+        NEW Node 0: Load conversation history for memory
+        Fetches the last N messages from the current session
+        """
+        # If memory is disabled or no session, skip
+        if not self.agent.memory_enabled or not self.session_id:
+            state["conversation_history"] = []
+            return state
+
+        try:
+            window = self.agent.memory_window or 10
+
+            past_messages = (
+                self.db.query(ChatLog)
+                .filter(ChatLog.session_id == self.session_id)
+                .order_by(ChatLog.created_at.desc())
+                .limit(window)
+                .all()
+            )
+
+            # Reverse so oldest is first (chronological order for LLM)
+            past_messages = list(reversed(past_messages))
+
+            history = []
+            for msg in past_messages:
+                history.append({"role": "user", "content": msg.user_message})
+                history.append({"role": "assistant", "content": msg.agent_response})
+
+            state["conversation_history"] = history
+            print(f"🧠 Loaded {len(past_messages)} past messages from session {self.session_id}")
+
+        except Exception as e:
+            print(f"Error loading history: {str(e)}")
+            state["conversation_history"] = []
+
+        return state
 
     async def retrieve_knowledge(self, state: AgentState) -> AgentState:
         """
@@ -86,7 +129,7 @@ class AgentExecutor:
             state["retrieved_docs"] = docs
             state["sources"] = [
                 {
-                    "text": doc["text"][:200] + "...",  # Preview
+                    "text": doc["text"][:200] + "...",
                     "source": doc.get("metadata", {}).get("source_file", "Unknown"),
                 }
                 for doc in docs
@@ -130,7 +173,7 @@ class AgentExecutor:
 
     async def generate_response(self, state: AgentState) -> AgentState:
         """
-        Node 3: Generate final response using LLM
+        Node 3: Generate final response using LLM with memory
         """
         try:
             # Build system prompt with RAG + few-shot
@@ -141,8 +184,12 @@ class AgentExecutor:
                 few_shot_examples=state["few_shot_examples"],
             )
 
-            # Format messages
-            messages = format_messages_for_llm(system_prompt, state["query"])
+            # Format messages WITH conversation history
+            messages = format_messages_with_history(
+                system_prompt=system_prompt,
+                conversation_history=state["conversation_history"],
+                user_message=state["query"],
+            )
 
             # Generate response
             response = await self.llm_gateway.generate(messages)
@@ -163,9 +210,9 @@ class AgentExecutor:
         Returns:
             Dict with response and sources
         """
-        # Initial state
         initial_state: AgentState = {
             "query": query,
+            "conversation_history": [],   # NEW
             "retrieved_docs": [],
             "few_shot_examples": [],
             "system_prompt": "",
@@ -173,7 +220,6 @@ class AgentExecutor:
             "sources": [],
         }
 
-        # Run the graph
         result = await self.graph.ainvoke(initial_state)
 
         return {

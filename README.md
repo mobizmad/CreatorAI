@@ -2,7 +2,7 @@
 
 **Build, train, and refine custom LLM agents with no code.**
 
-AgentBuilder is a platform that empowers non-technical users to create their own custom AI agents powered by LLMs. Upload your knowledge base, chat with your agent, improve it through corrections, and now **integrate it into any external system via API**.
+AgentBuilder is a platform that empowers non-technical users to create their own custom AI agents powered by LLMs. Upload your knowledge base, chat with your agent, improve it through corrections, integrate it into any external system via API, and now enjoy **conversation memory** so agents remember context across messages.
 
 <img src="https://github.com/user-attachments/assets/0d0fc5d0-f46b-4c08-b2ae-4f3df2821cf8" alt="Aung's Avatar" width="100" height="100"/>
 
@@ -19,6 +19,7 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 - **Agent Playground**: Interactive chat interface to test and refine your agents
 - **Source Attribution**: See which documents your agent used to generate responses
 - **API Generator**: Generate API keys to integrate your agents into any external system
+- **Conversation Memory**: Agents remember context within a session — follow-up questions just work
 
 ### Technical Stack
 
@@ -111,19 +112,96 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 2. Ask questions about your knowledge base
 3. The agent retrieves relevant information and shows sources
 
-### 5. Correct & Improve
+### 5. Use Conversation Memory
+
+The agent remembers context within each conversation session:
+
+1. Memory is **on by default** — look for the 🧠 brain toggle in the chat sidebar
+2. Start chatting — the agent remembers everything said earlier in the session
+3. Click **"+"** to start a fresh conversation (new session = blank memory)
+4. Past conversations appear in the sidebar and can be reloaded at any time
+5. Toggle memory **off** if you want each message treated independently
+
+**Example:**
+```
+You:   "My name is Alex"
+Agent: "Hello Alex! How can I help you?"
+You:   "What is my name?"
+Agent: "Your name is Alex."   ✅ Memory working!
+```
+
+### 6. Correct & Improve
 
 When your agent makes a mistake:
 1. Click "Correct this response"
 2. Provide the correct answer
 3. The correction is saved as a "golden example" for future responses
 
-### 6. Integrate via API (New!)
+### 7. Integrate via API
 
 1. In your agent's playground, click **"API Integration"** button
 2. Go to **"API Keys"** tab → click "Create API Key"
 3. Save your key (shown only once!)
 4. Use it to integrate your agent into any external system
+
+---
+
+## Conversation Memory
+
+### How It Works
+
+Each time a user opens a chat, a **session** is created. All messages in that session are linked together. When the agent responds, it loads the last N messages from the session and passes them to the LLM as conversation history — so the LLM has full context.
+
+```
+User sends message
+       ↓
+Load last 10 messages from session (memory window)
+       ↓
+Build: [system prompt, past msgs..., current message]
+       ↓
+LLM generates response with full context
+       ↓
+Save message + update session
+```
+
+### Memory Settings (per agent)
+
+Two fields on the Agent model control memory behavior:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `memory_enabled` | `true` | Turn memory on/off for this agent |
+| `memory_window` | `10` | How many past message pairs to include |
+
+### Session API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/agents/{id}/chat/sessions` | Create new session |
+| GET | `/agents/{id}/chat/sessions` | List all sessions |
+| GET | `/agents/{id}/chat/sessions/{session_id}/messages` | Load session messages |
+| DELETE | `/agents/{id}/chat/sessions/{session_id}` | Delete session |
+
+### Chat with Memory (Internal API)
+
+Pass `session_id` to enable memory. If omitted, a new session is created automatically:
+
+```bash
+# First message — no session_id needed, one is created and returned
+curl -X POST http://localhost:8000/agents/AGENT_ID/chat \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "My name is Alex"}'
+
+# Response includes session_id:
+# {"response": "Hello Alex!", "session_id": "abc-123", "sources": [...]}
+
+# Follow-up — pass session_id to continue with memory
+curl -X POST http://localhost:8000/agents/AGENT_ID/chat \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is my name?", "session_id": "abc-123"}'
+```
 
 ---
 
@@ -150,15 +228,6 @@ curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ab_YOUR_API_KEY" \
   -d '{"message": "Hello! What can you help with?"}'
-```
-
-Response:
-```json
-{
-  "response": "I can help you with...",
-  "sources": [{"text": "...", "source": "document.pdf"}],
-  "agent_name": "My Agent"
-}
 ```
 
 **Python example:**
@@ -254,7 +323,7 @@ curl -X POST http://localhost:8000/agents/AGENT_ID/knowledge \
 curl -X POST http://localhost:8000/agents/AGENT_ID/chat \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is the company policy?"}'
+  -d '{"message": "What is the company policy?", "session_id": "optional-session-id"}'
 ```
 
 Full API docs available at: http://localhost:8000/docs
@@ -289,24 +358,27 @@ Agent Executor
 ```
 1. User Query (via UI or API)
    ↓
-2. Retrieve Relevant Chunks (FAISS RAG)
+2. Load Conversation History (Memory)   ← NEW
    ↓
-3. Load Corrections (Few-Shot)
+3. Retrieve Relevant Chunks (FAISS RAG)
    ↓
-4. Build System Prompt
+4. Load Corrections (Few-Shot)
    ↓
-5. Generate Response (LLM)
+5. Build Message Array with History
    ↓
-6. Return Response + Sources
+6. Generate Response (LLM)
+   ↓
+7. Save to Session + Return Response
 ```
 
 ### Database Schema
 
 - `users` - User accounts
-- `agents` - Agent configurations
+- `agents` - Agent configurations (includes `memory_enabled`, `memory_window`)
 - `knowledge_bases` - Uploaded files metadata
 - `corrections` - Few-shot examples
-- `chat_logs` - Conversation history
+- `conversation_sessions` - Groups messages into sessions for memory
+- `chat_logs` - Individual messages (linked to session)
 - `agent_api_keys` - API keys for external integrations
 
 ---
@@ -370,16 +442,16 @@ AgentBuilder/
 │   │   ├── api/
 │   │   │   ├── auth.py          # Authentication endpoints
 │   │   │   ├── agents.py        # Agent management
-│   │   │   ├── chat.py          # Internal chat
+│   │   │   ├── chat.py          # Chat + session endpoints
 │   │   │   ├── knowledge.py     # File upload & management
 │   │   │   ├── corrections.py   # Few-shot corrections
-│   │   │   ├── api_keys.py      # API key management (NEW)
-│   │   │   └── public_api.py    # Public API endpoints (NEW)
+│   │   │   ├── api_keys.py      # API key management
+│   │   │   └── public_api.py    # Public API endpoints
 │   │   ├── core/
-│   │   │   ├── agent_graph.py   # LangGraph agent executor
-│   │   │   └── prompt_builder.py
-│   │   ├── models/models.py     # Database models
-│   │   ├── schemas/schemas.py   # Pydantic schemas
+│   │   │   ├── agent_graph.py   # LangGraph agent executor (with memory)
+│   │   │   └── prompt_builder.py # Prompt builder (with history support)
+│   │   ├── models/models.py     # Database models (incl. ConversationSession)
+│   │   ├── schemas/schemas.py   # Pydantic schemas (incl. SessionResponse)
 │   │   ├── services/
 │   │   │   ├── llm_gateway.py   # OpenAI/Ollama gateway
 │   │   │   ├── vector_store.py  # FAISS vector store
@@ -392,15 +464,15 @@ AgentBuilder/
 │   │   ├── app/
 │   │   │   ├── agents/[id]/
 │   │   │   │   ├── playground/  # Chat & training UI
-│   │   │   │   └── api/         # API key management UI (NEW)
+│   │   │   │   └── api/         # API key management UI
 │   │   │   └── dashboard/
 │   │   ├── components/
-│   │   │   ├── ChatInterface.tsx
+│   │   │   ├── ChatInterface.tsx  # Chat UI with memory sidebar
 │   │   │   ├── FileUploader.tsx
 │   │   │   ├── CorrectionModal.tsx
 │   │   │   ├── AgentCard.tsx
-│   │   │   ├── APIKeyManager.tsx  # API key UI (NEW)
-│   │   │   └── APIDocs.tsx        # API docs UI (NEW)
+│   │   │   ├── APIKeyManager.tsx  # API key UI
+│   │   │   └── APIDocs.tsx        # API docs UI
 │   │   └── lib/
 │   ├── package.json
 │   └── Dockerfile
@@ -460,6 +532,11 @@ AgentBuilder/
 - Verify Ollama is running: `ollama list`
 - Check `OLLAMA_ENDPOINT` is correct
 
+**"Agent doesn't remember previous messages"**
+- Check the 🧠 brain toggle is ON in the chat sidebar
+- Look for the purple "Memory active" banner at the top of chat
+- Verify migration ran: `docker-compose exec postgres psql -U postgres -d agentbuilder -c "\dt"` — you should see `conversation_sessions`
+
 ---
 
 ## Roadmap
@@ -473,6 +550,7 @@ AgentBuilder/
 - ✅ API Generator with key management
 - ✅ Public REST API for external integrations
 - ✅ Interactive API documentation
+- ✅ Conversation Memory with session history
 
 ### v1.1 (Planned)
 - [ ] Rate limiting per API key
@@ -511,6 +589,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - **API Docs**: http://localhost:8000/docs
 - **Issues**: [GitHub Issues](https://github.com/yourusername/agentbuilder/issues)
+- **Discussion**: [Discussion](https://github.com/aungkaungpyaepaing/LLMAgentCreator/discussions)
 - **Email**: aungkpp.dev@gmail.com
 
 ---
@@ -523,5 +602,3 @@ MIT License - see [LICENSE](LICENSE) for details.
 - UI components inspired by [Tailwind UI](https://tailwindui.com)
 
 ---
-
-**Happy Agent Building! 🤖**

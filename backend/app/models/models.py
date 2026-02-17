@@ -33,12 +33,15 @@ class Agent(Base):
     ollama_endpoint = Column(String)
     api_key = Column(String)  # For custom API keys
     temperature = Column(Float, default=0.7)
+    memory_enabled = Column(Boolean, default=True)   # NEW: memory feature
+    memory_window = Column(Integer, default=10)       # NEW: how many past messages to remember
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="agents")
     knowledge_bases = relationship("KnowledgeBase", back_populates="agent", cascade="all, delete-orphan")
     corrections = relationship("Correction", back_populates="agent", cascade="all, delete-orphan")
     chat_logs = relationship("ChatLog", back_populates="agent", cascade="all, delete-orphan")
+    sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")  # NEW
 
 
 class KnowledgeBase(Base):
@@ -70,17 +73,36 @@ class Correction(Base):
     agent = relationship("Agent", back_populates="corrections")
 
 
+class ConversationSession(Base):
+    """Groups chat messages into sessions for memory"""
+    __tablename__ = "conversation_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    message_count = Column(Integer, default=0)
+
+    agent = relationship("Agent", back_populates="sessions")
+    messages = relationship("ChatLog", back_populates="session", order_by="ChatLog.created_at")
+
+
 class ChatLog(Base):
     __tablename__ = "chat_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("conversation_sessions.id"), nullable=True)  # NEW
     user_message = Column(Text, nullable=False)
     agent_response = Column(Text, nullable=False)
     sources = Column(JSON)  # Metadata about retrieved chunks
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agent = relationship("Agent", back_populates="chat_logs")
+    session = relationship("ConversationSession", back_populates="messages")  # NEW
+
 
 class AgentAPIKey(Base):
     __tablename__ = "agent_api_keys"

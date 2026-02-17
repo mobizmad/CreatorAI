@@ -103,19 +103,21 @@ class CorrectionResponse(BaseModel):
         from_attributes = True
 
 
-# Chat Schemas
 class ChatMessage(BaseModel):
     message: str
+    session_id: Optional[UUID] = None
 
 
 class ChatResponse(BaseModel):
     response: str
     sources: Optional[List[dict]] = None
+    session_id: Optional[str] = None
 
 
 class ChatLogResponse(BaseModel):
     id: UUID
     agent_id: UUID
+    session_id: Optional[UUID]       
     user_message: str
     agent_response: str
     sources: Optional[dict]
@@ -160,3 +162,20 @@ class PublicChatResponse(BaseModel):
     sources: Optional[list] = None
     agent_name: str
     usage_remaining: Optional[int] = None
+
+
+class SessionCreate(BaseModel):
+    title: Optional[str] = None
+
+
+class SessionResponse(BaseModel):
+    id: UUID
+    agent_id: UUID
+    title: Optional[str]
+    created_at: datetime
+    last_message_at: datetime
+    message_count: int
+    is_active: bool
+
+    class Config:
+        from_attributes = True
