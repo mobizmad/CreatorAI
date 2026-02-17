@@ -3,6 +3,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
+import secrets
+from passlib.context import CryptContext
 
 from app.db.database import Base
 
@@ -79,3 +81,36 @@ class ChatLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agent = relationship("Agent", back_populates="chat_logs")
+
+class AgentAPIKey(Base):
+    __tablename__ = "agent_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    key_name = Column(String, nullable=False)
+    key_hash = Column(String, nullable=False, unique=True)
+    key_prefix = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    usage_count = Column(Integer, default=0)
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+    agent = relationship("Agent", backref="api_keys")
+
+    @staticmethod
+    def generate_key() -> str:
+        """Generate a new API key"""
+        return f"ab_{secrets.token_urlsafe(32)}"
+
+    @staticmethod
+    def hash_key(key: str) -> str:
+        """Hash an API key for storage"""
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        return pwd_context.hash(key)
+
+    @staticmethod
+    def verify_key(plain_key: str, hashed_key: str) -> bool:
+        """Verify an API key against its hash"""
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        return pwd_context.verify(plain_key, hashed_key)

@@ -123,3 +123,40 @@ class ChatLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class APIKeyCreate(BaseModel):
+    key_name: str
+    expires_in_days: Optional[int] = None
+
+class APIKeyResponse(BaseModel):
+    id: UUID
+    agent_id: UUID
+    key_name: str
+    key_prefix: str
+    is_active: bool
+    usage_count: int
+    last_used_at: Optional[datetime]
+    created_at: datetime
+    expires_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+class APIKeyCreatedResponse(BaseModel):
+    id: UUID
+    key_name: str
+    api_key: str
+    key_prefix: str
+    created_at: datetime
+    expires_at: Optional[datetime]
+    message: str = "Save this API key now. You won't be able to see it again!"
+
+class PublicChatRequest(BaseModel):
+    message: str
+    stream: bool = False
+
+class PublicChatResponse(BaseModel):
+    response: str
+    sources: Optional[list] = None
+    agent_name: str
+    usage_remaining: Optional[int] = None

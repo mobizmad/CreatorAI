@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Settings,
   Loader2,
+  Key,
 } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploader from '@/components/FileUploader';
@@ -114,6 +115,13 @@ export default function AgentPlayground() {
                 {agent.llm_provider} • {agent.llm_model}
               </p>
             </div>
+            <button
+              onClick={() => router.push(`/agents/${agentId}/api`)}
+              className="ml-auto flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+            >
+              <Key className="w-4 h-4" />
+              API Integration
+            </button>
           </div>
         </div>
       </header>

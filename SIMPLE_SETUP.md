@@ -53,12 +53,6 @@ OPENAI_API_KEY=sk-paste-your-real-key-here
 SECRET_KEY=paste-your-secret-key-here
 ```
 
-**Example:**
-```env
-OPENAI_API_KEY=sk-abc123xyz789yourrealkeyhere
-SECRET_KEY=x8GH2kLp9nM3vC1qR7bN4jK0fW6tY5sZ
-```
-
 ### 4️⃣ Start Everything
 
 ```bash
@@ -79,10 +73,64 @@ Go to: **http://localhost:3000**
 2. **Create an agent**
 3. **Upload PDFs/documents**
 4. **Start chatting!**
+5. **Generate API keys** to integrate into other systems 🆕
 
 ---
 
-## 🎮 Using Ollama (Optional - Local LLM)
+## 🔌 Using the API Generator (New Feature!)
+
+Want to use your agent in another app, website, or system?
+
+### Generate an API Key
+
+1. Go to your agent's playground
+2. Click **"API Integration"** button in the top right
+3. Click **"Create API Key"**
+4. Give it a name (e.g., "My App")
+5. **Copy the key immediately** - you won't see it again!
+
+### Use Your Agent via API
+
+```bash
+# Chat with your agent from anywhere!
+curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ab_YOUR_KEY_HERE" \
+  -d '{"message": "Hello!"}'
+```
+
+**Python:**
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat",
+    headers={"X-API-Key": "ab_YOUR_KEY"},
+    json={"message": "Hello!"}
+)
+print(response.json()["response"])
+```
+
+**JavaScript:**
+```javascript
+const res = await fetch("http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": "ab_YOUR_KEY"
+  },
+  body: JSON.stringify({ message: "Hello!" })
+});
+const data = await res.json();
+console.log(data.response);
+```
+
+> 💡 Find your Agent ID in the URL when you open your agent:
+> `http://localhost:3000/agents/THIS-IS-YOUR-AGENT-ID/playground`
+
+---
+
+## 🎮 Using Ollama (Optional - Free Local LLM)
 
 Want to use **free local models** like Llama 3.2?
 
@@ -126,6 +174,15 @@ In AgentBuilder:
 - Something is running on port 3000 or 8000
 - Stop other apps or change ports in `docker-compose.yml`
 
+### "Invalid API key" (Public API)
+- Make sure key starts with `ab_`
+- Check the key is active (not disabled)
+- Verify your Agent ID is correct in the URL
+
+### "404 - API page not found"
+- Make sure frontend container has the latest files
+- Run: `docker-compose restart frontend`
+
 ---
 
 ## 🔑 Summary
@@ -144,5 +201,10 @@ In AgentBuilder:
 - 📁 Documents: Stored locally in `./backend/uploads`
 - 🧠 Vectors: Stored locally in `./backend/vector_stores`
 - 💾 Database: PostgreSQL in Docker
+
+**New in this version:**
+- 🔌 API Generator - integrate your agents into any app
+- 🔑 API Key Management - create, revoke, and monitor keys
+- 📖 Auto-generated API docs with code examples
 
 Everything runs on your computer! 🎉

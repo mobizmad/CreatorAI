@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.db.database import init_db
 from app.api import auth, agents, knowledge, chat, corrections
-
+from app.api import auth, agents, knowledge, chat, corrections, api_keys, public_api
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +41,8 @@ app.include_router(agents.router)
 app.include_router(knowledge.router)
 app.include_router(chat.router)
 app.include_router(corrections.router)
+app.include_router(api_keys.router) 
+app.include_router(public_api.router) 
 
 
 @app.get("/")
