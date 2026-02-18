@@ -19,7 +19,8 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 - **Agent Playground**: Interactive chat interface to test and refine your agents
 - **Source Attribution**: See which documents your agent used to generate responses
 - **API Generator**: Generate API keys to integrate your agents into any external system
-- **Conversation Memory**: Agents remember context within a session — follow-up questions just work
+- **Conversation Memory**: Agents remember context across messages (Web UI)
+- **Public API Memory**: Maintain conversation context in external applications via session IDs (New!)
 
 ### Technical Stack
 
@@ -222,41 +223,109 @@ All public API requests require your API key in the header:
 X-API-Key: ab_your_api_key_here
 ```
 
-**Chat with your agent:**
+The API supports **Conversation Memory**. You can maintain a continuous chat session by passing a `session_id`.
+
+#### 1. Stateless Chat (One-off)
+If you don't pass a `session_id`, a new session is created automatically. The response will include a `session_id` that you can save for later.
+
 ```bash
 curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ab_YOUR_API_KEY" \
-  -d '{"message": "Hello! What can you help with?"}'
+  -d '{"message": "My name is Alice"}'
+```
+
+## Response: ## 
+
+```jason
+{
+  "response": "Hello Alice! How can I help you?",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "agent_name": "Support Bot",
+  "usage_remaining": 99
+}
+```
+
+### 2. Stateful Chat (With Memory)
+
+To continue the conversation, pass the `session_id` received from the previous response.
+
+```bash
+curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ab_YOUR_API_KEY" \
+  -d '{
+    "message": "What is my name?",
+    "session_id": "550e8400-e29b-41d4-a716-446655440000"
+  }'
+```
+
+## Response: ##
+
+```jason
+{
+  "response": "Your name is Alice.",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
 
 **Python example:**
 ```python
 import requests
 
-response = requests.post(
-    "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat",
-    headers={"X-API-Key": "ab_YOUR_KEY"},
-    json={"message": "What is the refund policy?"}
-)
-print(response.json()["response"])
+url = "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat"
+headers = {
+    "X-API-Key": "ab_YOUR_KEY",
+    "Content-Type": "application/json"
+}
+
+# 1. First message - no session_id
+response1 = requests.post(url, headers=headers, json={
+    "message": "My name is Alice"
+})
+data1 = response1.json()
+session_id = data1["session_id"]  # Save this!
+
+print(f"Agent: {data1['response']}")
+
+# 2. Follow-up with memory
+response2 = requests.post(url, headers=headers, json={
+    "message": "What is my name?",
+    "session_id": session_id  # Pass it back
+})
+data2 = response2.json()
+
+print(f"Agent: {data2['response']}") # Output: "Your name is Alice"
 ```
 
 **JavaScript example:**
 ```javascript
-const response = await fetch(
-  "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": "ab_YOUR_KEY"
-    },
-    body: JSON.stringify({ message: "Hello!" })
-  }
-);
-const data = await response.json();
-console.log(data.response);
+const url = "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat";
+const headers = {
+  "Content-Type": "application/json",
+  "X-API-Key": "ab_YOUR_KEY"
+};
+
+// 1. Start conversation
+const res1 = await fetch(url, {
+  method: "POST",
+  headers,
+  body: JSON.stringify({ message: "My name is Alice" })
+});
+const data1 = await res1.json();
+const sessionId = data1.session_id; // Save this!
+
+// 2. Continue conversation
+const res2 = await fetch(url, {
+  method: "POST",
+  headers,
+  body: JSON.stringify({ 
+    message: "What is my name?", 
+    session_id: sessionId 
+  })
+});
+const data2 = await res2.json();
+console.log(data2.response); // "Your name is Alice"
 ```
 
 ### Public API Endpoints

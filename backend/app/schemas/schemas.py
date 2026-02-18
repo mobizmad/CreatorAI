@@ -155,14 +155,15 @@ class APIKeyCreatedResponse(BaseModel):
 
 class PublicChatRequest(BaseModel):
     message: str
+    session_id: Optional[UUID] = None
     stream: bool = False
 
 class PublicChatResponse(BaseModel):
     response: str
     sources: Optional[list] = None
     agent_name: str
+    session_id: Optional[str] = None         
     usage_remaining: Optional[int] = None
-
 
 class SessionCreate(BaseModel):
     title: Optional[str] = None
