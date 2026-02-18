@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, AlertCircle, Plus, MessageSquare, Trash2, Brain } from 'lucide-react';
+import { Send, Loader2, AlertCircle, Plus, MessageSquare, Trash2, Brain, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import type { Source } from '@/lib/types';
 
@@ -11,9 +11,11 @@ interface ChatInterfaceProps {
 }
 
 interface Message {
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
+  rating?: number;
 }
 
 interface Session {
@@ -131,6 +133,34 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     }
   };
 
+  const handleRateMessage = async (messageId: string, rating: number) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat/${messageId}/rate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify({ rating }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to rate message');
+
+      // Update UI locally to show the new rating
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, rating } : msg
+        )
+      );
+    } catch (err) {
+      console.error('Error rating message:', err);
+    }
+  };
+
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -158,26 +188,29 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
         }
       );
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) {
+        const errorDetails = await response.text();
+        alert("🚨 BACKEND ERROR: " + errorDetails);
+        throw new Error('Failed to send message');
+      }
 
       const data = await response.json();
 
-      // Save the session_id returned from backend
       if (data.session_id && !currentSessionId) {
         setCurrentSessionId(data.session_id);
-        // Refresh sessions list to show the new one
         fetchSessions();
       } else if (data.session_id) {
-        // Update session title in sidebar after first message
         fetchSessions();
       }
 
       setMessages((prev) => [
         ...prev,
         {
+          id: data.message_id,
           role: 'assistant',
           content: data.response,
           sources: data.sources,
+          rating: 0,
         },
       ]);
     } catch (err) {
@@ -343,17 +376,47 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
                   </div>
                 )}
 
-                {/* Correct button */}
-                {message.role === 'assistant' && onCorrect && (
-                  <button
-                    onClick={() => {
-                      const userMsg = messages[index - 1]?.content || '';
-                      onCorrect(userMsg, message.content);
-                    }}
-                    className="mt-2 text-xs underline hover:text-primary-600"
-                  >
-                    Correct this response
-                  </button>
+                {/* Correct button & Rating Buttons */}
+                {message.role === 'assistant' && (
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200/50">
+                    {onCorrect ? (
+                      <button
+                        onClick={() => {
+                          const userMsg = messages[index - 1]?.content || '';
+                          onCorrect(userMsg, message.content);
+                        }}
+                        className="text-xs underline hover:text-primary-600"
+                      >
+                        Correct this response
+                      </button>
+                    ) : (
+                      <span /> /* Empty spacer if no correct button */
+                    )}
+
+                    {/* Rating Buttons */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleRateMessage(message.id!, 1)}
+                        className={`p-1 rounded hover:bg-gray-200 transition-colors ${
+                          message.rating === 1 ? 'text-green-600 bg-green-50' : 'text-gray-400'
+                        }`}
+                        disabled={!message.id}
+                        title="Helpful"
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRateMessage(message.id!, -1)}
+                        className={`p-1 rounded hover:bg-gray-200 transition-colors ${
+                          message.rating === -1 ? 'text-red-600 bg-red-50' : 'text-gray-400'
+                        }`}
+                        disabled={!message.id}
+                        title="Not helpful"
+                      >
+                        <ThumbsDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

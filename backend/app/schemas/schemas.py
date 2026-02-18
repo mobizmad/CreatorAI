@@ -112,6 +112,7 @@ class ChatResponse(BaseModel):
     response: str
     sources: Optional[List[dict]] = None
     session_id: Optional[str] = None
+    message_id: Optional[UUID] = None
 
 
 class ChatLogResponse(BaseModel):
@@ -121,10 +122,14 @@ class ChatLogResponse(BaseModel):
     user_message: str
     agent_response: str
     sources: Optional[dict]
+    rating: Optional[int] = 0
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class ChatRatingRequest(BaseModel):
+    rating: int  
 
 class APIKeyCreate(BaseModel):
     key_name: str

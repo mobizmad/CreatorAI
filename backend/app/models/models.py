@@ -99,7 +99,7 @@ class ChatLog(Base):
     agent_response = Column(Text, nullable=False)
     sources = Column(JSON)  # Metadata about retrieved chunks
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    rating = Column(Integer, default=0)
     agent = relationship("Agent", back_populates="chat_logs")
     session = relationship("ConversationSession", back_populates="messages")  # NEW
 

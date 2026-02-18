@@ -20,7 +20,9 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 - **Source Attribution**: See which documents your agent used to generate responses
 - **API Generator**: Generate API keys to integrate your agents into any external system
 - **Conversation Memory**: Agents remember context across messages (Web UI)
-- **Public API Memory**: Maintain conversation context in external applications via session IDs (New!)
+- **Public API Memory**: Maintain conversation context in external applications via session IDs 
+- **Chat Rating System**: Users can rate agent responses with a thumbs up (👍) or thumbs down (👎) to easily flag poor answers for correction.
+
 
 ### Technical Stack
 
@@ -131,12 +133,13 @@ You:   "What is my name?"
 Agent: "Your name is Alex."   ✅ Memory working!
 ```
 
-### 6. Correct & Improve
+### 6. Rate, Correct & Improve
 
-When your agent makes a mistake:
-1. Click "Correct this response"
-2. Provide the correct answer
-3. The correction is saved as a "golden example" for future responses
+When your agent provides an answer:
+1. Use the **Thumbs Up (👍)** or **Thumbs Down (👎)** buttons to rate the quality of the response.
+2. If the agent makes a mistake (or receives a downvote), click "Correct this response".
+3. Provide the correct answer.
+4. The correction is saved as a "golden example" for future responses.
 
 ### 7. Integrate via API
 
@@ -203,6 +206,15 @@ curl -X POST http://localhost:8000/agents/AGENT_ID/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "What is my name?", "session_id": "abc-123"}'
 ```
+**Rate Message (Internal)**
+```bash
+curl -X POST http://localhost:8000/agents/AGENT_ID/chat/MESSAGE_ID/rate \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"rating": -1}'  # Use 1 for thumbs up, -1 for thumbs down, 0 to clear
+```
+
+
 
 ---
 
@@ -447,7 +459,7 @@ Agent Executor
 - `knowledge_bases` - Uploaded files metadata
 - `corrections` - Few-shot examples
 - `conversation_sessions` - Groups messages into sessions for memory
-- `chat_logs` - Individual messages (linked to session)
+- `chat_logs` - Individual messages (linked to session,includes user 👍/👎 ratings)
 - `agent_api_keys` - API keys for external integrations
 
 ---
@@ -620,6 +632,7 @@ AgentBuilder/
 - ✅ Public REST API for external integrations
 - ✅ Interactive API documentation
 - ✅ Conversation Memory with session history
+- ✅ Chat Rating (👍/👎) system for quality tracking
 
 ### v1.1 (Planned)
 - [ ] Rate limiting per API key

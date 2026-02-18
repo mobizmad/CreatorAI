@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     ChatLogResponse,
     SessionCreate,
     SessionResponse,
+    ChatRatingRequest,
 )
 from app.api.auth import get_current_user
 from app.core.agent_graph import AgentExecutor
@@ -157,6 +158,7 @@ async def chat_with_agent(
             user_message=message.message,
             agent_response=result["response"],
             sources={"sources": result["sources"]},
+            rating=0,
         )
         db.add(chat_log)
 
@@ -168,11 +170,13 @@ async def chat_with_agent(
             session.title = title + "..." if len(message.message) > 60 else title
 
         db.commit()
+        db.refresh(chat_log)
 
         return ChatResponse(
             response=result["response"],
             sources=result.get("sources", []),
             session_id=str(session_id),
+            message_id=chat_log.id,
         )
 
     except Exception as e:
@@ -211,3 +215,29 @@ async def clear_chat_history(
     db.query(ConversationSession).filter(ConversationSession.agent_id == agent_id).delete()
     db.commit()
     return None
+
+
+@router.post("/{message_id}/rate", response_model=ChatLogResponse)
+async def rate_message(
+    agent_id: UUID,
+    message_id: UUID,
+    rating_data: ChatRatingRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rate a chat message (1 for helpful, -1 for unhelpful)"""
+    verify_agent_access(agent_id, current_user.id, db)
+    
+    chat_log = db.query(ChatLog).filter(
+        ChatLog.id == message_id,
+        ChatLog.agent_id == agent_id
+    ).first()
+    
+    if not chat_log:
+        raise HTTPException(status_code=404, detail="Message not found")
+        
+    chat_log.rating = rating_data.rating
+    db.commit()
+    db.refresh(chat_log)
+    
+    return chat_log
