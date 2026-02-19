@@ -10,10 +10,12 @@ import {
   Settings,
   Loader2,
   Key,
+  Brain,
 } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploader from '@/components/FileUploader';
 import CorrectionModal from '@/components/CorrectionModal';
+import FineTuneUploader from '@/components/FineTuneUploader';
 import { agentAPI, knowledgeAPI, correctionAPI } from '@/lib/api';
 import type { Agent, KnowledgeBase, Correction } from '@/lib/types';
 
@@ -23,7 +25,7 @@ export default function AgentPlayground() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune'>('chat');
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeBase[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,6 +175,18 @@ export default function AgentPlayground() {
                   {corrections.filter((c) => c.is_active).length}
                 </span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('finetune')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  activeTab === 'finetune'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Brain className="w-5 h-5" />
+                <span className="font-medium">Fine-Tuning</span>
+              </button>
             </div>
           </div>
 
@@ -228,6 +242,12 @@ export default function AgentPlayground() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+            
+            {activeTab === 'finetune' && (
+              <div className="h-full">
+                <FineTuneUploader agentId={agentId} />
               </div>
             )}
 

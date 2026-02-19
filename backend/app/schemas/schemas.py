@@ -185,3 +185,6 @@ class SessionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AgentModelUpdate(BaseModel):
+    llm_model: str
