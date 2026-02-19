@@ -5,9 +5,10 @@ import { Upload, Loader2, FileJson, CheckCircle, AlertCircle, Brain } from 'luci
 
 interface FineTuneUploaderProps {
   agentId: string;
+  isTraining?: boolean;
 }
 
-export default function FineTuneUploader({ agentId }: FineTuneUploaderProps) {
+export default function FineTuneUploader({ agentId, isTraining }: FineTuneUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({
@@ -108,6 +109,16 @@ export default function FineTuneUploader({ agentId }: FineTuneUploaderProps) {
         <Brain className="w-5 h-5 text-primary-500" />
         Fine-Tune Agent
       </h3>
+      {/* ADD THIS BLOCK */}
+      {isTraining && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+          <div className="text-sm text-blue-700">
+            <p className="font-bold">Model Training in Progress</p>
+            <p>Your agent is currently being upgraded. This usually takes 10-20 minutes. You can keep using the current model in the meantime.</p>
+          </div>
+        </div>
+      )}
       <p className="text-sm text-gray-600 mb-6">
         Upload a <code>.jsonl</code> file containing at least 10 conversational examples to train your agent's behavior.
       </p>

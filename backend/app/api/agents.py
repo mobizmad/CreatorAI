@@ -1,6 +1,8 @@
 import json
 import os
 import tempfile
+import asyncio
+from fastapi import BackgroundTasks
 from fastapi import UploadFile, File
 from openai import AsyncOpenAI
 
@@ -140,6 +142,7 @@ openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 @router.post("/{agent_id}/finetune/upload")
 async def upload_finetune_data(
     agent_id: UUID,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -191,10 +194,20 @@ async def upload_finetune_data(
             )
 
         # 5. Trigger the Fine-Tuning Job
-        # We use 'gpt-4o-mini' as the standard lightweight base model for fine-tuning
         job = await openai_client.fine_tuning.jobs.create(
             training_file=openai_file.id,
             model="gpt-4o-mini-2024-07-18"
+        )
+
+        # Update status in DB
+        agent.is_training = True 
+        db.commit()
+
+        background_tasks.add_task(
+            monitor_and_update_model, 
+            agent_id, 
+            job.id, 
+            get_db 
         )
 
         return {
@@ -235,3 +248,43 @@ async def update_agent_model(
         "message": "Agent model updated successfully!", 
         "llm_model": agent.llm_model
     }
+
+async def monitor_and_update_model(agent_id: UUID, job_id: str, db_session_factory):
+    """Polls OpenAI every 60s and updates the database when the job is done"""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            job = await openai_client.fine_tuning.jobs.retrieve(job_id)
+            
+            if job.status == "succeeded":
+                new_model_name = job.fine_tuned_model
+                
+                db_gen = db_session_factory()
+                db = next(db_gen) 
+                try:
+                    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+                    if agent:
+                        agent.llm_model = new_model_name
+                        agent.is_training = False  # <--- UPDATED: Turn off training status
+                        db.commit()
+                        print(f"Successfully auto-updated Agent {agent_id} to {new_model_name}")
+                finally:
+                    db_gen.close() 
+                break
+                
+            elif job.status in ["failed", "cancelled"]:
+                # If it fails, we still need to turn off the training status in the DB
+                db_gen = db_session_factory()
+                db = next(db_gen)
+                try:
+                    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+                    if agent:
+                        agent.is_training = False  # <--- UPDATED: Turn off training status
+                        db.commit()
+                finally:
+                    db_gen.close()
+                print(f"Fine-tuning job {job_id} failed or was cancelled.")
+                break
+        except Exception as e:
+            print(f"Error monitoring fine-tune job: {e}")
+            break

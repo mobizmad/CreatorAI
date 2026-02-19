@@ -11,11 +11,13 @@ import {
   Loader2,
   Key,
   Brain,
+  SplitSquareHorizontal,
 } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploader from '@/components/FileUploader';
 import CorrectionModal from '@/components/CorrectionModal';
 import FineTuneUploader from '@/components/FineTuneUploader';
+import ModelComparison from '@/components/ModelComparison';
 import { agentAPI, knowledgeAPI, correctionAPI } from '@/lib/api';
 import type { Agent, KnowledgeBase, Correction } from '@/lib/types';
 
@@ -25,7 +27,7 @@ export default function AgentPlayground() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune' | 'compare'>('chat'); 
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeBase[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,6 +189,18 @@ export default function AgentPlayground() {
                 <Brain className="w-5 h-5" />
                 <span className="font-medium">Fine-Tuning</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('compare')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  activeTab === 'compare'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <SplitSquareHorizontal className="w-5 h-5" />
+                <span className="font-medium">A/B Testing</span>
+              </button>
             </div>
           </div>
 
@@ -247,7 +261,19 @@ export default function AgentPlayground() {
             
             {activeTab === 'finetune' && (
               <div className="h-full">
-                <FineTuneUploader agentId={agentId} />
+                <FineTuneUploader 
+                  agentId={agentId} 
+                  isTraining={agent.is_training} 
+                />
+              </div>
+            )}
+            
+            {activeTab === 'compare' && (
+              <div className="h-[calc(100vh-200px)]">
+                <ModelComparison 
+                  agentId={agentId} 
+                  customModelName={agent.llm_model} 
+                />
               </div>
             )}
 

@@ -20,6 +20,8 @@ AgentBuilder သည် နည်းပညာပိုင်းမကျွမ်
 - **Conversation Memory**: Agent များသည် message များတစ်လျှောက် အကြောင်းအရာများကို မှတ်မိခြင်း (Web UI တွင်)
 - **Public API Memory**: Session ID များမှတစ်ဆင့် ပြင်ပ application များတွင် စကားပြောဆိုမှု အကြောင်းအရာကို ဆက်လက်ထိန်းသိမ်းထားနိုင်ခြင်း
 - **Chat Rating System**: အသုံးပြုသူများသည် ညံ့ဖျင်းသော အဖြေများကို အလွယ်တကူ မှတ်သားနိုင်ရန်နှင့် ပြင်ဆင်နိုင်ရန်အတွက် အဖြေများကို လက်မထောင် (👍) သို့မဟုတ် လက်မချ (👎) ဖြင့် အဆင့်သတ်မှတ်ပေးနိုင်ခြင်း
+- **Model Fine-Tuning**: Agent ၏ စွမ်းဆောင်ရည်ကို ပိုမိုကောင်းမွန်စေရန် OpenAI model များကို မိမိစိတ်ကြိုက် ဒေတာများဖြင့် fine-tune ပြုလုပ်နိုင်ခြင်း.
+- **A/B Testing Playground**: Fine-tune ပြုလုပ်ထားသော model နှင့် မူလ model (Factory Default) တို့ကို ဘေးချင်းယှဉ်၍ အဖြေများကို တိုက်ရိုက်နှိုင်းယှဉ် စမ်းသပ်နိုင်ခြင်း.
 
 
 ### အသုံးပြုထားသော နည်းပညာများ (Technical Stack)
@@ -134,6 +136,16 @@ Agent: "သင့်နာမည်က Alex ပါ။"    ✅ Memory အလု�
     2. "API Keys" tab သို့ သွားပါ → "Create API Key" ကို နှိပ်ပါ
     3. သင့် key ကို သိမ်းဆည်းပါ (တစ်ကြိမ်သာ ပြသပါမည်!)
     4. ၎င်းကို အသုံးပြု၍ သင့် agent ကို မည်သည့် ပြင်ပစနစ်နှင့်မဆို ချိတ်ဆက်ပါ
+
+8. **Fine-Tuning နှင့် A/B Testing အသုံးပြုနည်း**
+  
+သင့် agent သည် သင့်လုပ်ငန်းသဘာဝကို ပိုမိုနားလည်စေရန် အောက်ပါအတိုင်း လုပ်ဆောင်နိုင်ပါသည်:
+
+    1. **Fine-Tuning ပြုလုပ်ခြင်း**: "Fine-Tuning" tab သို့သွား၍ သင်ပြင်ဆင်ထားသော 'Golden Examples' (ပြင်ဆင်ချက်များ) ကို အသုံးပြုကာ model ကို စတင်လေ့ကျင့် (train) ပေးပါ.
+    2. A/B Testing ဖြင့် စမ်းသပ်ခြင်း:
+      - "A/B Testing" tab သို့သွားပါ.
+      - ဘယ်ဘက်ခြမ်းတွင် **Factory Default** (မူလ model) နှင့် ညာဘက်ခြမ်းတွင် **Your Fine-Tuned Agent** (သင်လေ့ကျင့်ပေးထားသော model) ကို တွေ့ရပါမည်.
+      - မေးခွန်းတစ်ခုတည်းကို မော်ဒယ်နှစ်ခုလုံးထံ ပို့ကြည့်ပြီး မည်သည့်အဖြေက ပိုမိုကောင်းမွန်သည်ကို တိုက်ရိုက်နှိုင်းယှဉ်နိုင်ပါသည်.
     
 ---
 
@@ -495,44 +507,63 @@ AgentBuilder/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── auth.py          # Authentication endpoints
-│   │   │   ├── agents.py        # Agent management
-│   │   │   ├── chat.py          # Chat + session endpoints
-│   │   │   ├── knowledge.py     # File upload & management
-│   │   │   ├── corrections.py   # Few-shot corrections
-│   │   │   ├── api_keys.py      # API key management
-│   │   │   └── public_api.py    # Public API endpoints
+│   │   │   ├── agents.py
+│   │   │   ├── api_keys.py
+│   │   │   ├── auth.py
+│   │   │   ├── chat.py
+│   │   │   ├── corrections.py
+│   │   │   ├── knowledge.py
+│   │   │   └── public_api.py
 │   │   ├── core/
-│   │   │   ├── agent_graph.py   # LangGraph agent executor (memory ပါဝင်သည်)
-│   │   │   └── prompt_builder.py # Prompt builder (history ထောက်ပံ့မှုပါဝင်သည်)
-│   │   ├── models/models.py     # Database models (ConversationSession ပါဝင်သည်)
-│   │   ├── schemas/schemas.py   # Pydantic schemas (SessionResponse ပါဝင်သည်)
+│   │   │   ├── agent_graph.py
+│   │   │   └── prompt_builder.py
+│   │   ├── db/
+│   │   │   └── database.py
+│   │   ├── models/
+│   │   │   └── models.py
+│   │   ├── schemas/
+│   │   │   ├── schemas.py
+│   │   │
 │   │   ├── services/
-│   │   │   ├── llm_gateway.py   # OpenAI/Ollama gateway
-│   │   │   ├── vector_store.py  # FAISS vector store
-│   │   │   └── document_processor.py
+│   │   │   ├── document_processor.py
+│   │   │   ├── llm_gateway.py
+│   │   │   └── vector_store.py
+│   │   ├── config.py
 │   │   └── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
+│
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── agents/[id]/
-│   │   │   │   ├── playground/  # Chat & training UI
-│   │   │   │   └── api/         # API key management UI
-│   │   │   └── dashboard/
+│   │   │   │   ├── api/
+│   │   │   │   └── playground/
+│   │   │   ├── dashboard/
+│   │   │   │   └── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
 │   │   ├── components/
-│   │   │   ├── ChatInterface.tsx  # Memory sidebar ပါဝင်သော Chat UI
-│   │   │   ├── FileUploader.tsx
-│   │   │   ├── CorrectionModal.tsx
 │   │   │   ├── AgentCard.tsx
-│   │   │   ├── APIKeyManager.tsx  # API key UI
-│   │   │   └── APIDocs.tsx        # API docs UI
-│   │   └── lib/
+│   │   │   ├── APIDocs.tsx
+│   │   │   ├── APIKeyManager.tsx
+│   │   │   ├── ChatInterface.tsx
+│   │   │   ├── CorrectionModal.tsx
+│   │   │   ├── FileUploader.tsx
+│   │   │   ├── FineTuneUploader.tsx
+│   │   │   └── ModelComparison.tsx
+│   │   ├── hooks/
+│   │   └── styles/
 │   ├── package.json
+│   ├── next.config.js
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
 │   └── Dockerfile
+│
 ├── docker-compose.yml
-└── README.md
+├── README.md
+└── README_EG.md
+
 ```
 ---
 

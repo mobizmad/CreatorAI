@@ -30,12 +30,14 @@ class AgentExecutor:
         agent_id: str,
         db: Session,
         vector_store: VectorStoreService,
-        session_id: Optional[str] = None,   # NEW: pass session to load history
+        session_id: Optional[str] = None,
+        model_override: Optional[str] = None,
     ):
         self.agent_id = agent_id
         self.db = db
         self.vector_store = vector_store
-        self.session_id = session_id         # NEW
+        self.session_id = session_id      
+        self.model_override = model_override
 
         # Load agent configuration
         self.agent = self._load_agent()
@@ -53,9 +55,11 @@ class AgentExecutor:
 
     def _initialize_llm(self) -> LLMGateway:
         """Initialize LLM gateway based on agent configuration"""
+        target_model = self.model_override if self.model_override else self.agent.llm_model
+        
         return LLMGateway(
             provider=self.agent.llm_provider,
-            model=self.agent.llm_model,
+            model=target_model, 
             api_key=self.agent.api_key,
             endpoint=self.agent.ollama_endpoint,
             temperature=self.agent.temperature,

@@ -62,6 +62,7 @@ class AgentResponse(BaseModel):
     llm_model: str
     ollama_endpoint: Optional[str]
     temperature: float
+    is_training: bool
     created_at: datetime
 
     class Config:
@@ -106,12 +107,13 @@ class CorrectionResponse(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     session_id: Optional[UUID] = None
-
+    model_override: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
     sources: Optional[List[dict]] = None
     session_id: Optional[str] = None
+    model_override: Optional[str] = None
     message_id: Optional[UUID] = None
 
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, Trash2, Edit, MessageSquare } from 'lucide-react';
+import { Bot, Trash2, Edit, MessageSquare, Loader2 } from 'lucide-react';
 import type { Agent } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
@@ -59,6 +59,14 @@ export default function AgentCard({ agent, onDelete }: AgentCardProps) {
               {agent.llm_provider === 'openai' ? 'OpenAI' : 'Ollama'} •{' '}
               {agent.llm_model}
             </span>
+
+            {/* NEW: Training Status Badge */}
+            {agent.is_training && (
+              <span className="inline-flex items-center gap-1 ml-2 px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800 animate-pulse border border-amber-200">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Training...
+              </span>
+            )}
           </div>
         </div>
 

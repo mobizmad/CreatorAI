@@ -14,9 +14,19 @@ export default function Dashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
+    // 1. Initial Load
     loadAgents();
+
+    // 2. Setup Polling every 30 seconds
+    const interval = setInterval(() => {
+      loadAgents();
+    }, 30000); 
+
+    // 3. Cleanup on unmount (important!)
+    return () => clearInterval(interval);
   }, []);
 
+  
   const loadAgents = async () => {
     try {
       const data = await agentAPI.list();

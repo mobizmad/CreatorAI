@@ -33,9 +33,10 @@ class Agent(Base):
     ollama_endpoint = Column(String)
     api_key = Column(String)  # For custom API keys
     temperature = Column(Float, default=0.7)
-    memory_enabled = Column(Boolean, default=True)   # NEW: memory feature
-    memory_window = Column(Integer, default=10)       # NEW: how many past messages to remember
+    memory_enabled = Column(Boolean, default=True)   #  memory feature
+    memory_window = Column(Integer, default=10)       #  how many past messages to remember
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_training = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="agents")
     knowledge_bases = relationship("KnowledgeBase", back_populates="agent", cascade="all, delete-orphan")

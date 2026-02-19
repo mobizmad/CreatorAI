@@ -149,6 +149,7 @@ async def chat_with_agent(
             db=db,
             vector_store=vector_store,
             session_id=str(session_id),
+            model_override=message.model_override
         )
         result = await executor.run(message.message)
 

@@ -22,13 +22,16 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 - **Conversation Memory**: Agents remember context across messages (Web UI)
 - **Public API Memory**: Maintain conversation context in external applications via session IDs 
 - **Chat Rating System**: Users can rate agent responses with a thumbs up (👍) or thumbs down (👎) to easily flag poor answers for correction.
+- **Custom Fine-Tuning**: Train your agents on your specific datasets using OpenAI's Fine-Tuning API to improve tone, style, and accuracy.
+- **A/B Testing Playground**: Compare your fine-tuned model and the factory model side-by-side to test and compare response quality.
 
 
 ### Technical Stack
 
 **Backend:**
-- Python 3.11+ with FastAPI
+- Python 3.11+ with FastAPI (Fixed bcrypt==3.2.2 and passlib compatibility).
 - LangChain & LangGraph for agent orchestration
+- OpenAI Fine-Tuning integration for model training.
 - PostgreSQL for data storage
 - FAISS for local vector embeddings (no external API needed!)
 - SQLAlchemy ORM
@@ -36,6 +39,7 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 **Frontend:**
 - Next.js 14 with React 18
 - TypeScript
+- A/B Comparison Dashboard with dual-chat synchronization.
 - Tailwind CSS
 
 **LLM Providers:**
@@ -147,6 +151,17 @@ When your agent provides an answer:
 2. Go to **"API Keys"** tab → click "Create API Key"
 3. Save your key (shown only once!)
 4. Use it to integrate your agent into any external system
+
+### 8. Fine-Tuning & A/B Testing Workflow   
+
+Improve your agent's performance by training it on your specific "Golden Examples":
+
+1. **Prepare Training Data**: Collect corrections and high-quality responses in the "Corrections" tab.
+2. **Start Fine-Tuning**: Navigate to the "Fine-Tuning" tab and trigger a training job using your collected examples.
+3. **Evaluate with A/B Testing**:
+    - Open the **A/B Testing** tab.
+    - Send a test message; the interface will query both the **Factory Default** model and your **Fine-Tuned** Agent simultaneously.
+    - Compare responses side-by-side to ensure your fine-tuned model meets your quality standards before deployment.
 
 ---
 
@@ -521,44 +536,63 @@ AgentBuilder/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── auth.py          # Authentication endpoints
-│   │   │   ├── agents.py        # Agent management
-│   │   │   ├── chat.py          # Chat + session endpoints
-│   │   │   ├── knowledge.py     # File upload & management
-│   │   │   ├── corrections.py   # Few-shot corrections
-│   │   │   ├── api_keys.py      # API key management
-│   │   │   └── public_api.py    # Public API endpoints
+│   │   │   ├── agents.py
+│   │   │   ├── api_keys.py
+│   │   │   ├── auth.py
+│   │   │   ├── chat.py
+│   │   │   ├── corrections.py
+│   │   │   ├── knowledge.py
+│   │   │   └── public_api.py
 │   │   ├── core/
-│   │   │   ├── agent_graph.py   # LangGraph agent executor (with memory)
-│   │   │   └── prompt_builder.py # Prompt builder (with history support)
-│   │   ├── models/models.py     # Database models (incl. ConversationSession)
-│   │   ├── schemas/schemas.py   # Pydantic schemas (incl. SessionResponse)
+│   │   │   ├── agent_graph.py
+│   │   │   └── prompt_builder.py
+│   │   ├── db/
+│   │   │   └── database.py
+│   │   ├── models/
+│   │   │   └── models.py
+│   │   ├── schemas/
+│   │   │   ├── schemas.py
+│   │   │
 │   │   ├── services/
-│   │   │   ├── llm_gateway.py   # OpenAI/Ollama gateway
-│   │   │   ├── vector_store.py  # FAISS vector store
-│   │   │   └── document_processor.py
+│   │   │   ├── document_processor.py
+│   │   │   ├── llm_gateway.py
+│   │   │   └── vector_store.py
+│   │   ├── config.py
 │   │   └── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
+│
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── agents/[id]/
-│   │   │   │   ├── playground/  # Chat & training UI
-│   │   │   │   └── api/         # API key management UI
-│   │   │   └── dashboard/
+│   │   │   │   ├── api/
+│   │   │   │   └── playground/
+│   │   │   ├── dashboard/
+│   │   │   │   └── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
 │   │   ├── components/
-│   │   │   ├── ChatInterface.tsx  # Chat UI with memory sidebar
-│   │   │   ├── FileUploader.tsx
-│   │   │   ├── CorrectionModal.tsx
 │   │   │   ├── AgentCard.tsx
-│   │   │   ├── APIKeyManager.tsx  # API key UI
-│   │   │   └── APIDocs.tsx        # API docs UI
-│   │   └── lib/
+│   │   │   ├── APIDocs.tsx
+│   │   │   ├── APIKeyManager.tsx
+│   │   │   ├── ChatInterface.tsx
+│   │   │   ├── CorrectionModal.tsx
+│   │   │   ├── FileUploader.tsx
+│   │   │   ├── FineTuneUploader.tsx
+│   │   │   └── ModelComparison.tsx
+│   │   ├── hooks/
+│   │   └── styles/
 │   ├── package.json
+│   ├── next.config.js
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
 │   └── Dockerfile
+│
 ├── docker-compose.yml
-└── README.md
+├── README.md
+└── README_EG.md
+
 ```
 
 ---
