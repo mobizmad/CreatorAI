@@ -190,3 +190,33 @@ class SessionResponse(BaseModel):
 
 class AgentModelUpdate(BaseModel):
     llm_model: str
+
+class AnalyticsOverview(BaseModel):
+    total_messages: int
+    total_sessions: int
+    average_rating: float
+    messages_today: int
+    messages_week: int
+    messages_month: int
+    total_api_usage: int
+    thumbs_up: int
+    thumbs_down: int
+
+
+class AnalyticsTimeSeries(BaseModel):
+    date: str  # YYYY-MM-DD format
+    count: int
+
+
+class TopQuestion(BaseModel):
+    question: str
+    count: int
+    avg_rating: Optional[float]
+
+
+class APIKeyUsage(BaseModel):
+    key_name: str
+    key_prefix: str
+    usage_count: int
+    last_used_at: Optional[datetime]
+    is_active: bool

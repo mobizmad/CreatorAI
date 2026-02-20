@@ -12,6 +12,7 @@ import {
   Key,
   Brain,
   SplitSquareHorizontal,
+  TrendingUp,
 } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploader from '@/components/FileUploader';
@@ -20,6 +21,7 @@ import FineTuneUploader from '@/components/FineTuneUploader';
 import ModelComparison from '@/components/ModelComparison';
 import { agentAPI, knowledgeAPI, correctionAPI } from '@/lib/api';
 import type { Agent, KnowledgeBase, Correction } from '@/lib/types';
+import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 
 export default function AgentPlayground() {
   const router = useRouter();
@@ -27,7 +29,7 @@ export default function AgentPlayground() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune' | 'compare'>('chat'); 
+  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune' | 'compare' | 'analytics'>('chat'); 
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeBase[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -201,6 +203,18 @@ export default function AgentPlayground() {
                 <SplitSquareHorizontal className="w-5 h-5" />
                 <span className="font-medium">A/B Testing</span>
               </button>
+
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  activeTab === 'analytics'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <TrendingUp className="w-5 h-5" />
+                <span className="font-medium">Analytics</span>
+              </button>
             </div>
           </div>
 
@@ -267,7 +281,7 @@ export default function AgentPlayground() {
                 />
               </div>
             )}
-            
+
             {activeTab === 'compare' && (
               <div className="h-[calc(100vh-200px)]">
                 <ModelComparison 
@@ -339,6 +353,11 @@ export default function AgentPlayground() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {activeTab === 'analytics' && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <AnalyticsDashboard agentId={agentId} />
               </div>
             )}
           </div>

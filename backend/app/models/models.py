@@ -118,7 +118,7 @@ class AgentAPIKey(Base):
     last_used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
-
+    rate_limit_tier = Column(String, default="free")
     agent = relationship("Agent", backref="api_keys")
 
     @staticmethod

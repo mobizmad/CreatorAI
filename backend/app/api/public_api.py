@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime
@@ -8,6 +8,7 @@ from app.models.models import Agent, AgentAPIKey, ConversationSession, ChatLog
 from app.schemas.schemas import PublicChatRequest, PublicChatResponse
 from app.core.agent_graph import AgentExecutor
 from app.services.vector_store import VectorStoreService
+from app.services.rate_limiter import get_rate_limiter
 from app.api.api_keys import verify_api_key
 
 router = APIRouter(prefix="/v1", tags=["Public API"])
@@ -23,7 +24,12 @@ async def public_chat(
     """
     **Public Chat Endpoint** - Use this to integrate your agent into external systems.
     
-    This endpoint requires API key authentication via the `X-API-Key` header.
+    **Rate Limiting:**
+    - Free tier: 100 requests/day, 10 requests/minute
+    - Basic tier: 1000 requests/day, 50 requests/minute
+    - Pro tier: 10000 requests/day, 200 requests/minute
+    - Returns `429 Too Many Requests` when limit exceeded
+    - Response includes `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers
     
     **Conversation Memory:**
     - Pass `session_id` to enable memory across messages
@@ -32,42 +38,27 @@ async def public_chat(
     
     **Authentication:**
     - Header: `X-API-Key: ab_your_api_key_here`
-    
-    **Request:**
-    ```json
-    {
-        "message": "Your question here",
-        "session_id": "optional-uuid-for-memory",
-        "stream": false
-    }
-    ```
-    
-    **Response:**
-    ```json
-    {
-        "response": "Agent's response",
-        "sources": [...],
-        "agent_name": "Your Agent Name",
-        "session_id": "uuid-to-use-for-follow-ups"
-    }
-    ```
-    
-    **Example with Memory:**
-    ```python
-    # First message - no session_id
-    response1 = requests.post(url, json={"message": "My name is Alice"})
-    session_id = response1.json()["session_id"]
-    
-    # Follow-up - pass session_id for memory
-    response2 = requests.post(url, json={
-        "message": "What is my name?",
-        "session_id": session_id
-    })
-    # Agent will respond: "Your name is Alice"
-    ```
-    
-    **Rate Limiting:** Based on your plan (future feature)
     """
+    # Check rate limit
+    rate_limiter = get_rate_limiter()
+    tier = api_key.rate_limit_tier or 'free'
+    
+    allowed, remaining, reset_time = rate_limiter.check_rate_limit(
+        api_key_id=str(api_key.id),
+        tier=tier
+    )
+    
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "Rate limit exceeded",
+                "message": f"You have exceeded the rate limit for the {tier} tier",
+                "reset_time": reset_time,
+                "tier": tier,
+            }
+        )
+    
     # Load agent
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
@@ -76,12 +67,11 @@ async def public_chat(
             detail="Agent not found",
         )
 
-    # Resolve session - create one if not provided
+    # Resolve session
     session_id = request.session_id
     session = None
 
     if session_id:
-        # Verify session exists and belongs to this agent
         session = (
             db.query(ConversationSession)
             .filter(
@@ -96,7 +86,6 @@ async def public_chat(
                 detail="Session not found or doesn't belong to this agent"
             )
     else:
-        # Auto-create a session for this API conversation
         session = ConversationSession(
             agent_id=agent_id,
             title=f"API: {request.message[:50]}...",
@@ -107,10 +96,8 @@ async def public_chat(
         session_id = session.id
 
     try:
-        # Initialize vector store
         vector_store = VectorStoreService()
 
-        # Create agent executor WITH session for memory
         executor = AgentExecutor(
             agent_id=str(agent_id),
             db=db,
@@ -118,10 +105,9 @@ async def public_chat(
             session_id=str(session_id) if agent.memory_enabled else None,
         )
 
-        # Run the agent
         result = await executor.run(request.message)
 
-        # Save message to chat log WITH session
+        # Save message
         chat_log = ChatLog(
             agent_id=agent_id,
             session_id=session_id,
@@ -131,14 +117,17 @@ async def public_chat(
         )
         db.add(chat_log)
 
-        # Update session metadata
+        # Update session
         session.last_message_at = datetime.utcnow()
         session.message_count = (session.message_count or 0) + 1
 
-        # Auto-generate session title from first message
         if session.message_count == 1:
             title_preview = request.message[:50]
             session.title = f"API: {title_preview}..." if len(request.message) > 50 else f"API: {title_preview}"
+
+        # Update API key usage count
+        api_key.usage_count = (api_key.usage_count or 0) + 1
+        api_key.last_used_at = datetime.utcnow()
 
         db.commit()
 
@@ -147,6 +136,7 @@ async def public_chat(
             sources=result.get("sources", []),
             agent_name=agent.name,
             session_id=str(session_id),
+            usage_remaining=remaining,  # NEW: Show remaining requests
         )
 
     except Exception as e:
@@ -163,11 +153,7 @@ async def get_agent_info(
     db: Session = Depends(get_db),
     api_key: AgentAPIKey = Depends(verify_api_key),
 ):
-    """
-    Get public information about an agent.
-    
-    **Authentication:** Requires API key in `X-API-Key` header
-    """
+    """Get public information about an agent"""
     agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if not agent:
         raise HTTPException(
@@ -183,6 +169,41 @@ async def get_agent_info(
         "llm_model": agent.llm_model,
         "memory_enabled": agent.memory_enabled,
         "created_at": agent.created_at.isoformat(),
+    }
+
+
+@router.get("/usage")
+async def get_api_usage(
+    api_key: AgentAPIKey = Depends(verify_api_key),
+):
+    """
+    Get current usage statistics for your API key
+    
+    Returns rate limit tier, remaining requests, and reset times
+    """
+    rate_limiter = get_rate_limiter()
+    tier = api_key.rate_limit_tier or 'free'
+    
+    stats = rate_limiter.get_usage_stats(
+        api_key_id=str(api_key.id),
+        tier=tier
+    )
+    
+    return {
+        "api_key_name": api_key.key_name,
+        "tier": stats['tier'],
+        "total_usage": api_key.usage_count or 0,
+        "last_used": api_key.last_used_at.isoformat() if api_key.last_used_at else None,
+        "limits": {
+            "minute": {
+                "remaining": stats['minute_remaining'],
+                "limit": stats['minute_limit'],
+            },
+            "day": {
+                "remaining": stats['day_remaining'],
+                "limit": stats['day_limit'],
+            }
+        }
     }
 
 
