@@ -24,6 +24,8 @@ AgentBuilder is a platform that empowers non-technical users to create their own
 - **Chat Rating System**: Users can rate agent responses with a thumbs up (👍) or thumbs down (👎) to easily flag poor answers for correction.
 - **Custom Fine-Tuning**: Train your agents on your specific datasets using OpenAI's Fine-Tuning API to improve tone, style, and accuracy.
 - **A/B Testing Playground**: Compare your fine-tuned model and the factory model side-by-side to test and compare response quality.
+- **Analytics Dashboard**: Visualize agent performance, track API usage, and discover the most frequently asked questions.
+- **API Rate Limiting**: Production-ready token bucket rate limiting with predefined pricing tiers (Free, Basic, Pro) to protect your infrastructure.
 
 
 ### Technical Stack
@@ -361,6 +363,7 @@ console.log(data2.response); // "Your name is Alice"
 |--------|----------|-------------|
 | POST | `/v1/agents/{agent_id}/chat` | Chat with agent |
 | GET | `/v1/agents/{agent_id}/info` | Get agent info |
+| GET | `/v1/usage` | Get current API key usage stats & rate limits |
 | GET | `/v1/health` | API health check |
 
 ### API Key Management Endpoints (Requires User Auth)
@@ -474,8 +477,8 @@ Agent Executor
 - `knowledge_bases` - Uploaded files metadata
 - `corrections` - Few-shot examples
 - `conversation_sessions` - Groups messages into sessions for memory
-- `chat_logs` - Individual messages (linked to session,includes user 👍/👎 ratings)
-- `agent_api_keys` - API keys for external integrations
+- `chat_logs` - Individual messages (linked to session, includes user 👍/👎 ratings)
+- `agent_api_keys` - API keys for external integrations (includes `rate_limit_tier` and `usage_count`)
 
 ---
 
@@ -667,10 +670,10 @@ AgentBuilder/
 - ✅ Interactive API documentation
 - ✅ Conversation Memory with session history
 - ✅ Chat Rating (👍/👎) system for quality tracking
+- ✅ Usage analytics dashboard
+- ✅ Rate limiting per API key
 
 ### v1.1 (Planned)
-- [ ] Rate limiting per API key
-- [ ] Usage analytics dashboard
 - [ ] Webhook support
 - [ ] Streaming API responses
 - [ ] Bulk file upload

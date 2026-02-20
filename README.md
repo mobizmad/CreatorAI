@@ -22,6 +22,8 @@ AgentBuilder သည် နည်းပညာပိုင်းမကျွမ်
 - **Chat Rating System**: အသုံးပြုသူများသည် ညံ့ဖျင်းသော အဖြေများကို အလွယ်တကူ မှတ်သားနိုင်ရန်နှင့် ပြင်ဆင်နိုင်ရန်အတွက် အဖြေများကို လက်မထောင် (👍) သို့မဟုတ် လက်မချ (👎) ဖြင့် အဆင့်သတ်မှတ်ပေးနိုင်ခြင်း
 - **Model Fine-Tuning**: Agent ၏ စွမ်းဆောင်ရည်ကို ပိုမိုကောင်းမွန်စေရန် OpenAI model များကို မိမိစိတ်ကြိုက် ဒေတာများဖြင့် fine-tune ပြုလုပ်နိုင်ခြင်း.
 - **A/B Testing Playground**: Fine-tune ပြုလုပ်ထားသော model နှင့် မူလ model (Factory Default) တို့ကို ဘေးချင်းယှဉ်၍ အဖြေများကို တိုက်ရိုက်နှိုင်းယှဉ် စမ်းသပ်နိုင်ခြင်း.
+- **Analytics Dashboard**: Agent ၏ စွမ်းဆောင်ရည်၊ အမေးများသော မေးခွန်းများနှင့် API အသုံးပြုမှုများကို ခြေရာခံနိုင်သော အသေးစိတ် Dashboard
+- **API Rate Limiting**: API အလွဲသုံးစားလုပ်ခြင်းမှ ကာကွယ်ရန်နှင့် အသုံးပြုမှုအလိုက် ဈေးနှုန်းသတ်မှတ်ချက်များ (Free, Basic, Pro) ခွဲခြားနိုင်ရန် Rate Limiting စနစ်
 
 
 ### အသုံးပြုထားသော နည်းပညာများ (Technical Stack)
@@ -333,6 +335,7 @@ console.log(data2.response); // "Your name is Alice"
 |--------|----------|-------------|
 | POST | `/v1/agents/{agent_id}/chat` | chatAgent နှင့် စကားပြောရန် |
 | GET | `/v1/agents/{agent_id}/info` | infoAgent ၏ အချက်အလက်များကို ယူရန် |
+| GET | `/v1/usage` | API key အသုံးပြုမှုနှင့် Rate limit ကိုစစ်ဆေးရန် |
 | GET | `/v1/health` | API လုပ်ဆောင်နိုင်စွမ်း စစ်ဆေးရန် |
 
 
@@ -446,7 +449,7 @@ Agent Executor
 - corrections - Few-shot ဥပမာများ
 - conversation_sessions - မှတ်ဉာဏ်အတွက် message များကို session များအဖြစ် စုစည်းထားခြင်း
 - chat_logs - Message တစ်ခုချင်းစီ (session နှင့်ချိတ်ဆက်ထားပြီး အသုံးပြုသူ၏ 👍/👎 အဆင့်သတ်မှတ်ချက်များ ပါဝင်သည်)
-- agent_api_keys - ပြင်ပစနစ်များနှင့်ချိတ်ဆက်ရန် API key များ
+- agent_api_keys - ပြင်ပစနစ်များနှင့်ချိတ်ဆက်ရန် API key များ (rate_limit_tier နှင့် usage_count များ ပါဝင်သည်)
 
 ---
 
@@ -639,10 +642,10 @@ AgentBuilder/
 - ✅ အပြန်အလှန်အသုံးပြုနိုင်သော API documentation
 - ✅ Session မှတ်တမ်းများပါဝင်သော Conversation Memory
 - ✅ အရည်အသွေးကို ခြေရာခံရန် Chat Rating (👍/👎) 
+- ✅ API key တစ်ခုချင်းစီအတွက် Rate limiting ပြုလုပ်ခြင်း
+- ✅ Usage analytics dashboard
 
 ### စနစ်v1.1 (Planned)
-- [ ] API key တစ်ခုချင်းစီအတွက် Rate limiting ပြုလုပ်ခြင်း
-- [ ] Usage analytics dashboard
 - [ ] Webhook support
 - [ ] Streaming API responses
 - [ ] ဖိုင်များကို အများအပြား တစ်ပြိုင်တည်းတင်ခြင်း (Bulk file upload)
