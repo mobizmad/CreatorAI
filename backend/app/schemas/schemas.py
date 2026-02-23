@@ -221,3 +221,20 @@ class APIKeyUsage(BaseModel):
     usage_count: int
     last_used_at: Optional[datetime]
     is_active: bool
+
+# Bulk Upload Schemas
+class FileUploadStatus(BaseModel):
+    """Status of a single file in bulk upload"""
+    filename: str
+    success: bool
+    error: Optional[str] = None
+    chunk_count: int
+    knowledge_id: Optional[str] = None
+
+
+class BulkUploadResponse(BaseModel):
+    """Response for bulk file upload"""
+    total: int
+    successful: int
+    failed: int
+    files: List[FileUploadStatus]

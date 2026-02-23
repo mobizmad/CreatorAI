@@ -645,10 +645,10 @@ AgentBuilder/
 - ✅ API key တစ်ခုချင်းစီအတွက် Rate limiting ပြုလုပ်ခြင်း
 - ✅ Usage analytics dashboard
 - ✅ Streaming API responses
+- ✅ ဖိုင်များကို အများအပြား တစ်ပြိုင်တည်းတင်ခြင်း (Bulk file upload)
 
 ### စနစ်v1.1 (Planned)
 - [ ] Webhook support
-- [ ] ဖိုင်များကို အများအပြား တစ်ပြိုင်တည်းတင်ခြင်း (Bulk file upload)
 
 ### v2.0 (Future)
 - [ ] Agent များ အချင်းချင်း စကားပြောဆိုခြင်း (Multi-agent conversations)

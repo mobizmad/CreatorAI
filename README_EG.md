@@ -673,10 +673,10 @@ AgentBuilder/
 - ✅ Usage analytics dashboard
 - ✅ Rate limiting per API key
 - ✅ Streaming API responses
+- ✅ Bulk file upload
 
 ### v1.1 (Planned)
 - [ ] Webhook support
-- [ ] Bulk file upload
 
 ### v2.0 (Future)
 - [ ] Multi-agent conversations
