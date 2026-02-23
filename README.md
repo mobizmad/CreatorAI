@@ -646,6 +646,7 @@ AgentBuilder/
 - ✅ Usage analytics dashboard
 - ✅ Streaming API responses
 - ✅ ဖိုင်များကို အများအပြား တစ်ပြိုင်တည်းတင်ခြင်း (Bulk file upload)
+- ✅ Agent များကို လျင်မြန်စွာ ဖန်တီးနိုင်ရန် အသင့်သုံး Templates များ (Pre-built Agent Templates)
 
 ### စနစ်v1.1 (Planned)
 - [ ] Webhook support

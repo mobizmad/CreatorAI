@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.db.database import init_db
 from app.api import auth, agents, knowledge, chat, corrections
-from app.api import auth, agents, knowledge, chat, corrections, api_keys, public_api
+from app.api import auth, agents, knowledge, chat, corrections, api_keys, public_api,templates
 from app.api import analytics
 from app.services.rate_limiter import init_rate_limiter
 
@@ -52,6 +52,7 @@ app.include_router(corrections.router)
 app.include_router(api_keys.router) 
 app.include_router(public_api.router) 
 app.include_router(analytics.router)
+app.include_router(templates.router)
 
 
 @app.get("/")

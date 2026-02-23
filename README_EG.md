@@ -674,6 +674,7 @@ AgentBuilder/
 - ✅ Rate limiting per API key
 - ✅ Streaming API responses
 - ✅ Bulk file upload
+- ✅ Pre-built Agent Templates
 
 ### v1.1 (Planned)
 - [ ] Webhook support

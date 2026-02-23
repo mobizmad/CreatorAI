@@ -35,6 +35,7 @@ class Agent(Base):
     temperature = Column(Float, default=0.7)
     memory_enabled = Column(Boolean, default=True)   #  memory feature
     memory_window = Column(Integer, default=10)       #  how many past messages to remember
+    output_template = Column(Text, nullable=True)     # NEW: Added for templates
     created_at = Column(DateTime, default=datetime.utcnow)
     is_training = Column(Boolean, default=False)
 
@@ -42,7 +43,32 @@ class Agent(Base):
     knowledge_bases = relationship("KnowledgeBase", back_populates="agent", cascade="all, delete-orphan")
     corrections = relationship("Correction", back_populates="agent", cascade="all, delete-orphan")
     chat_logs = relationship("ChatLog", back_populates="agent", cascade="all, delete-orphan")
-    sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")  # NEW
+    sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")
+
+
+# NEW MODEL: Pre-configured agent templates
+class AgentTemplate(Base):
+    """Pre-configured agent templates for quick setup"""
+    __tablename__ = "agent_templates"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String, nullable=False)  # 'support', 'hr', 'education', etc.
+    icon = Column(String, default="🤖")
+    system_prompt = Column(Text, nullable=False)
+    output_template = Column(Text, nullable=True)
+    temperature = Column(Float, default=0.7)
+    llm_provider = Column(String, default="openai")
+    llm_model = Column(String, default="gpt-4")
+    sample_corrections = Column(JSON, default=list)  # Pre-loaded examples
+    is_public = Column(Boolean, default=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    usage_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationship (optional, if you want to track who created it)
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class KnowledgeBase(Base):

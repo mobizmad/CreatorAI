@@ -34,6 +34,7 @@ class AgentCreate(BaseModel):
     name: str
     description: Optional[str] = None
     system_prompt: Optional[str] = None
+    output_template: Optional[str] = None  # NEW: Added for templates
     llm_provider: str = "openai"
     llm_model: str = "gpt-4"
     ollama_endpoint: Optional[str] = None
@@ -45,6 +46,7 @@ class AgentUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     system_prompt: Optional[str] = None
+    output_template: Optional[str] = None  # NEW: Added for templates
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     ollama_endpoint: Optional[str] = None
@@ -58,11 +60,12 @@ class AgentResponse(BaseModel):
     name: str
     description: Optional[str]
     system_prompt: Optional[str]
+    output_template: Optional[str]  # NEW: Added for templates
     llm_provider: str
     llm_model: str
     ollama_endpoint: Optional[str]
     temperature: float
-    is_training: bool
+    is_training: bool               # RESTORED: Needed for Fine-Tuning
     created_at: datetime
 
     class Config:
@@ -238,3 +241,51 @@ class BulkUploadResponse(BaseModel):
     successful: int
     failed: int
     files: List[FileUploadStatus]
+
+
+# ─────────────────────────────────────────
+# NEW: Template Schemas
+# ─────────────────────────────────────────
+
+class TemplateResponse(BaseModel):
+    """Template displayed in gallery"""
+    id: UUID
+    name: str
+    description: str
+    category: str
+    icon: str
+    system_prompt: str
+    output_template: Optional[str]
+    temperature: float
+    llm_provider: str
+    llm_model: str
+    usage_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateCreate(BaseModel):
+    """Create a new template (admin only)"""
+    name: str
+    description: str
+    category: str
+    icon: str = "🤖"
+    system_prompt: str
+    output_template: Optional[str] = None
+    temperature: float = 0.7
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4"
+    sample_corrections: Optional[List[dict]] = []
+
+
+class AgentFromTemplateRequest(BaseModel):
+    """Create agent from template with customization"""
+    template_id: UUID
+    name: str  # Required: User must name their agent
+    description: Optional[str] = None  # Optional: Uses template default if not provided
+    system_prompt: Optional[str] = None  # Optional: Uses template default if not provided
+    output_template: Optional[str] = None  # Optional: Uses template default if not provided
+    llm_provider: Optional[str] = None  # Optional: Uses template default
+    llm_model: Optional[str] = None  # Optional: Uses template default
