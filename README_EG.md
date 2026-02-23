@@ -672,10 +672,10 @@ AgentBuilder/
 - ✅ Chat Rating (👍/👎) system for quality tracking
 - ✅ Usage analytics dashboard
 - ✅ Rate limiting per API key
+- ✅ Streaming API responses
 
 ### v1.1 (Planned)
 - [ ] Webhook support
-- [ ] Streaming API responses
 - [ ] Bulk file upload
 
 ### v2.0 (Future)

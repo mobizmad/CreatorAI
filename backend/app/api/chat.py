@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, AsyncGenerator
 from uuid import UUID
 from datetime import datetime
+import json
+import asyncio
 
 from app.db.database import get_db
 from app.models.models import User, Agent, ChatLog, ConversationSession
@@ -22,6 +25,7 @@ router = APIRouter(prefix="/agents/{agent_id}/chat", tags=["Chat"])
 
 
 def verify_agent_access(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
+    """Verify user has access to agent"""
     agent = (
         db.query(Agent).filter(Agent.id == agent_id, Agent.user_id == user_id).first()
     )
@@ -32,6 +36,10 @@ def verify_agent_access(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
         )
     return agent
 
+
+# ─────────────────────────────────────────
+# Session Endpoints
+# ─────────────────────────────────────────
 
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
@@ -112,6 +120,73 @@ async def delete_session(
     return None
 
 
+# ─────────────────────────────────────────
+# Chat Endpoint with Streaming Support
+# ─────────────────────────────────────────
+
+async def stream_response(
+    executor: AgentExecutor,
+    message: str,
+    agent_id: UUID,
+    session_id: UUID,
+    db: Session
+) -> AsyncGenerator[str, None]:
+    """
+    Stream agent response token by token
+    """
+    full_response = ""
+    sources = []
+    
+    try:
+        # Run agent with streaming enabled
+        async for chunk in executor.run_streaming(message):
+            if chunk["type"] == "token":
+                token = chunk["content"]
+                full_response += token
+                
+                # Send token to client
+                yield f"data: {json.dumps({'token': token, 'sources': None})}\n\n"
+                await asyncio.sleep(0)  # Allow other tasks to run
+                
+            elif chunk["type"] == "sources":
+                sources = chunk["content"]
+        
+        # Send final sources
+        yield f"data: {json.dumps({'token': '', 'sources': sources})}\n\n"
+        
+        # Send done signal
+        yield "data: [DONE]\n\n"
+        
+        # Save to database after streaming completes
+        session = db.query(ConversationSession).filter(
+            ConversationSession.id == session_id
+        ).first()
+        
+        if session:
+            chat_log = ChatLog(
+                agent_id=agent_id,
+                session_id=session_id,
+                user_message=message,
+                agent_response=full_response,
+                sources={"sources": sources},
+                rating=0, # <-- RESTORED: Needed for your rating system
+            )
+            db.add(chat_log)
+            
+            session.last_message_at = datetime.utcnow()
+            session.message_count = (session.message_count or 0) + 1
+            
+            if session.message_count == 1:
+                title = message[:60]
+                session.title = title + "..." if len(message) > 60 else title
+            
+            db.commit()
+            
+    except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+
 @router.post("", response_model=ChatResponse)
 async def chat_with_agent(
     agent_id: UUID,
@@ -119,8 +194,12 @@ async def chat_with_agent(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Send a message to an agent and get a response
+    """
     agent = verify_agent_access(agent_id, current_user.id, db)
 
+    # Resolve session
     session_id = message.session_id
     session = None
 
@@ -149,8 +228,22 @@ async def chat_with_agent(
             db=db,
             vector_store=vector_store,
             session_id=str(session_id),
-            model_override=message.model_override
+            model_override=message.model_override # <-- RESTORED: Needed for A/B Testing
         )
+        
+        # Check if streaming is requested (using getattr just in case schema isn't updated yet)
+        if getattr(message, "stream", False):
+            return StreamingResponse(
+                stream_response(executor, message.message, agent_id, session_id, db),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                }
+            )
+        
+        # Non-streaming (original behavior)
         result = await executor.run(message.message)
 
         chat_log = ChatLog(
@@ -159,7 +252,7 @@ async def chat_with_agent(
             user_message=message.message,
             agent_response=result["response"],
             sources={"sources": result["sources"]},
-            rating=0,
+            rating=0, # <-- RESTORED: Needed for your rating system
         )
         db.add(chat_log)
 
@@ -171,13 +264,13 @@ async def chat_with_agent(
             session.title = title + "..." if len(message.message) > 60 else title
 
         db.commit()
-        db.refresh(chat_log)
+        db.refresh(chat_log) # <-- RESTORED: We need the ID for the ChatResponse
 
         return ChatResponse(
             response=result["response"],
             sources=result.get("sources", []),
             session_id=str(session_id),
-            message_id=chat_log.id,
+            message_id=chat_log.id, # <-- RESTORED: Needed for frontend ratings
         )
 
     except Exception as e:
@@ -186,6 +279,10 @@ async def chat_with_agent(
             detail=f"Error processing chat: {str(e)}",
         )
 
+
+# ─────────────────────────────────────────
+# Existing Endpoints (History & Rating)
+# ─────────────────────────────────────────
 
 @router.get("/history", response_model=List[ChatLogResponse])
 async def get_chat_history(
@@ -219,7 +316,7 @@ async def clear_chat_history(
 
 
 @router.post("/{message_id}/rate", response_model=ChatLogResponse)
-async def rate_message(
+async def rate_message( # <-- RESTORED: The entire rating endpoint they deleted!
     agent_id: UUID,
     message_id: UUID,
     rating_data: ChatRatingRequest,

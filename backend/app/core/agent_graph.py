@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Optional
+from typing import TypedDict, List, Dict, Optional, AsyncGenerator
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ class AgentState(TypedDict):
 class AgentExecutor:
     """
     LangGraph-based agent executor with RAG, few-shot learning,
-    and conversation memory.
+    conversation memory, and streaming support.
     """
 
     def __init__(
@@ -37,7 +37,7 @@ class AgentExecutor:
         self.db = db
         self.vector_store = vector_store
         self.session_id = session_id      
-        self.model_override = model_override
+        self.model_override = model_override # <-- RESTORED: Needed for A/B Testing
 
         # Load agent configuration
         self.agent = self._load_agent()
@@ -55,6 +55,7 @@ class AgentExecutor:
 
     def _initialize_llm(self) -> LLMGateway:
         """Initialize LLM gateway based on agent configuration"""
+        # <-- RESTORED: This targets the A/B Testing model override
         target_model = self.model_override if self.model_override else self.agent.llm_model
         
         return LLMGateway(
@@ -70,13 +71,13 @@ class AgentExecutor:
         workflow = StateGraph(AgentState)
 
         # Add nodes
-        workflow.add_node("load_history", self.load_history)         # NEW first node
+        workflow.add_node("load_history", self.load_history)         
         workflow.add_node("retrieve_knowledge", self.retrieve_knowledge)
         workflow.add_node("load_corrections", self.load_corrections)
         workflow.add_node("generate_response", self.generate_response)
 
         # Define edges
-        workflow.set_entry_point("load_history")                     # NEW entry point
+        workflow.set_entry_point("load_history")                     
         workflow.add_edge("load_history", "retrieve_knowledge")
         workflow.add_edge("retrieve_knowledge", "load_corrections")
         workflow.add_edge("load_corrections", "generate_response")
@@ -84,12 +85,12 @@ class AgentExecutor:
 
         return workflow.compile()
 
+    # ─────────────────────────────────────────
+    # GRAPH NODES (Original Async Logic Kept)
+    # ─────────────────────────────────────────
+
     async def load_history(self, state: AgentState) -> AgentState:
-        """
-        NEW Node 0: Load conversation history for memory
-        Fetches the last N messages from the current session
-        """
-        # If memory is disabled or no session, skip
+        """Node 0: Load conversation history for memory"""
         if not self.agent.memory_enabled or not self.session_id:
             state["conversation_history"] = []
             return state
@@ -105,7 +106,6 @@ class AgentExecutor:
                 .all()
             )
 
-            # Reverse so oldest is first (chronological order for LLM)
             past_messages = list(reversed(past_messages))
 
             history = []
@@ -114,8 +114,6 @@ class AgentExecutor:
                 history.append({"role": "assistant", "content": msg.agent_response})
 
             state["conversation_history"] = history
-            print(f"🧠 Loaded {len(past_messages)} past messages from session {self.session_id}")
-
         except Exception as e:
             print(f"Error loading history: {str(e)}")
             state["conversation_history"] = []
@@ -123,9 +121,7 @@ class AgentExecutor:
         return state
 
     async def retrieve_knowledge(self, state: AgentState) -> AgentState:
-        """
-        Node 1: Retrieve relevant documents from vector store
-        """
+        """Node 1: Retrieve relevant documents from vector store"""
         try:
             docs = await self.vector_store.similarity_search(
                 agent_id=str(self.agent_id), query=state["query"], k=4
@@ -146,9 +142,7 @@ class AgentExecutor:
         return state
 
     async def load_corrections(self, state: AgentState) -> AgentState:
-        """
-        Node 2: Load active corrections as few-shot examples
-        """
+        """Node 2: Load active corrections as few-shot examples"""
         try:
             corrections = (
                 self.db.query(Correction)
@@ -176,11 +170,8 @@ class AgentExecutor:
         return state
 
     async def generate_response(self, state: AgentState) -> AgentState:
-        """
-        Node 3: Generate final response using LLM with memory
-        """
+        """Node 3: Generate final response using LLM with memory (Non-streaming)"""
         try:
-            # Build system prompt with RAG + few-shot
             system_prompt = build_system_prompt(
                 base_prompt=self.agent.system_prompt or "",
                 custom_instructions="",
@@ -188,14 +179,12 @@ class AgentExecutor:
                 few_shot_examples=state["few_shot_examples"],
             )
 
-            # Format messages WITH conversation history
             messages = format_messages_with_history(
                 system_prompt=system_prompt,
                 conversation_history=state["conversation_history"],
                 user_message=state["query"],
             )
 
-            # Generate response
             response = await self.llm_gateway.generate(messages)
             state["final_response"] = response
 
@@ -204,19 +193,62 @@ class AgentExecutor:
 
         return state
 
+    # ─────────────────────────────────────────
+    # NEW: STREAMING LOGIC
+    # ─────────────────────────────────────────
+
+    async def generate_response_streaming(self, state: AgentState) -> AsyncGenerator[Dict, None]:
+        """Generate response using LLM with streaming"""
+        system_prompt = build_system_prompt(
+            base_prompt=self.agent.system_prompt or "",
+            custom_instructions="",
+            retrieved_docs=state["retrieved_docs"],
+            few_shot_examples=state["few_shot_examples"],
+        )
+
+        messages = format_messages_with_history(
+            system_prompt=system_prompt,
+            conversation_history=state["conversation_history"],
+            user_message=state["query"],
+        )
+
+        # Stream tokens from LLM
+        async for token in self.llm_gateway.generate_streaming(messages):
+            yield {"type": "token", "content": token}
+
+        # Send sources after response completes
+        yield {"type": "sources", "content": state["sources"]}
+
+    async def run_streaming(self, query: str) -> AsyncGenerator[Dict, None]:
+        """Execute agent graph manually with streaming response"""
+        state: AgentState = {
+            "query": query,
+            "conversation_history": [],
+            "retrieved_docs": [],
+            "few_shot_examples": [],
+            "system_prompt": "",
+            "final_response": "",
+            "sources": [],
+        }
+
+        # Run retrieval nodes sequentially (they are async)
+        state = await self.load_history(state)
+        state = await self.retrieve_knowledge(state)
+        state = await self.load_corrections(state)
+
+        # Stream the LLM response
+        async for chunk in self.generate_response_streaming(state):
+            yield chunk
+
+    # ─────────────────────────────────────────
+    # EXECUTION
+    # ─────────────────────────────────────────
+
     async def run(self, query: str) -> Dict:
-        """
-        Execute the agent graph
-
-        Args:
-            query: User's question
-
-        Returns:
-            Dict with response and sources
-        """
+        """Execute the agent graph (Non-streaming)"""
         initial_state: AgentState = {
             "query": query,
-            "conversation_history": [],   # NEW
+            "conversation_history": [],
             "retrieved_docs": [],
             "few_shot_examples": [],
             "system_prompt": "",

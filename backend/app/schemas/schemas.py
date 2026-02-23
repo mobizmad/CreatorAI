@@ -108,6 +108,7 @@ class ChatMessage(BaseModel):
     message: str
     session_id: Optional[UUID] = None
     model_override: Optional[str] = None
+    stream: bool = False
 
 class ChatResponse(BaseModel):
     response: str

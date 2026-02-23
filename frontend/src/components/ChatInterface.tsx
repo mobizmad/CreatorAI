@@ -11,11 +11,12 @@ interface ChatInterfaceProps {
 }
 
 interface Message {
-  id?: string;
+  id?: string;               // RESTORED: Needed for ratings
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
-  rating?: number;
+  rating?: number;           // RESTORED: Needed for ratings
+  isStreaming?: boolean;     // NEW: For streaming UI
 }
 
 interface Session {
@@ -35,6 +36,7 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [streamingEnabled, setStreamingEnabled] = useState(true); // NEW: Streaming toggle state
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -97,9 +99,11 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
         for (const log of data) {
           loadedMessages.push({ role: 'user', content: log.user_message });
           loadedMessages.push({
+            id: log.id,                 // RESTORED
             role: 'assistant',
             content: log.agent_response,
             sources: log.sources?.sources || [],
+            rating: log.rating || 0,    // RESTORED
           });
         }
         setMessages(loadedMessages);
@@ -133,6 +137,7 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     }
   };
 
+  // RESTORED: Rating function
   const handleRateMessage = async (messageId: string, rating: number) => {
     try {
       const response = await fetch(
@@ -149,7 +154,6 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
 
       if (!response.ok) throw new Error('Failed to rate message');
 
-      // Update UI locally to show the new rating
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === messageId ? { ...msg, rating } : msg
@@ -159,7 +163,6 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
       console.error('Error rating message:', err);
     }
   };
-
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -172,52 +175,142 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
     setIsLoading(true);
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify({
-            message: userMessage,
-            // Pass session_id if memory is enabled and we have a session
-            session_id: memoryEnabled ? currentSessionId : null,
-          }),
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/chat`;
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      };
+      const body = JSON.stringify({
+        message: userMessage,
+        session_id: memoryEnabled ? currentSessionId : null,
+        stream: streamingEnabled, // NEW
+      });
+
+      if (streamingEnabled) {
+        // Streaming mode
+        await handleStreamingResponse(url, headers, body, userMessage);
+      } else {
+        // Non-streaming mode (Original behavior)
+        const response = await fetch(url, { method: 'POST', headers, body });
+
+        if (!response.ok) {
+          const errorDetails = await response.text();
+          alert("🚨 BACKEND ERROR: " + errorDetails);
+          throw new Error('Failed to send message');
         }
-      );
 
-      if (!response.ok) {
-        const errorDetails = await response.text();
-        alert("🚨 BACKEND ERROR: " + errorDetails);
-        throw new Error('Failed to send message');
+        const data = await response.json();
+
+        if (data.session_id && !currentSessionId) {
+          setCurrentSessionId(data.session_id);
+          fetchSessions();
+        } else if (data.session_id) {
+          fetchSessions();
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: data.message_id, // RESTORED
+            role: 'assistant',
+            content: data.response,
+            sources: data.sources,
+            rating: 0,           // RESTORED
+          },
+        ]);
       }
-
-      const data = await response.json();
-
-      if (data.session_id && !currentSessionId) {
-        setCurrentSessionId(data.session_id);
-        fetchSessions();
-      } else if (data.session_id) {
-        fetchSessions();
-      }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: data.message_id,
-          role: 'assistant',
-          content: data.response,
-          sources: data.sources,
-          rating: 0,
-        },
-      ]);
     } catch (err) {
       setError('Failed to send message. Please try again.');
       console.error('Chat error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleStreamingResponse = async (
+    url: string,
+    headers: any,
+    body: string,
+    userMessage: string
+  ) => {
+    // Add placeholder streaming message
+    const placeholderIndex = messages.length + 1;
+    setMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: '', isStreaming: true, rating: 0 },
+    ]);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullResponse = '';
+    let sources: any[] = [];
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              // Stream complete
+              setMessages((prev) =>
+                prev.map((msg, idx) =>
+                  idx === placeholderIndex
+                    ? { ...msg, content: fullResponse, sources, isStreaming: false }
+                    : msg
+                )
+              );
+
+              // Update session
+              if (!currentSessionId) {
+                fetchSessions();
+              }
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.token) {
+                fullResponse += parsed.token;
+                setMessages((prev) =>
+                  prev.map((msg, idx) =>
+                    idx === placeholderIndex ? { ...msg, content: fullResponse } : msg
+                  )
+                );
+              }
+              if (parsed.sources) {
+                sources = parsed.sources;
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Streaming error:', err);
+      setMessages((prev) =>
+        prev.map((msg, idx) =>
+          idx === placeholderIndex
+            ? { ...msg, content: fullResponse || 'Error during streaming', isStreaming: false }
+            : msg
+        )
+      );
     }
   };
 
@@ -242,10 +335,8 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
 
   return (
     <div className="flex h-full bg-white rounded-lg shadow overflow-hidden">
-
-      {/* ── Sidebar: Conversation History ── */}
+      {/* Sidebar */}
       <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50">
-        {/* Sidebar header */}
         <div className="p-3 border-b border-gray-200 flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">Conversations</span>
           <button
@@ -261,18 +352,18 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
         <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2">
           <Brain className="w-4 h-4 text-purple-500" />
           <span className="text-xs text-gray-600 flex-1">Memory</span>
-            <button
-              onClick={() => setMemoryEnabled(!memoryEnabled)}
-              className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
-                memoryEnabled ? 'bg-purple-500' : 'bg-gray-300'
+          <button
+            onClick={() => setMemoryEnabled(!memoryEnabled)}
+            className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
+              memoryEnabled ? 'bg-purple-500' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${
+                memoryEnabled ? 'translate-x-4' : 'translate-x-0'
               }`}
-            >
-              <span
-                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${
-                  memoryEnabled ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
+            />
+          </button>
         </div>
 
         {/* Sessions list */}
@@ -282,16 +373,16 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
               <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
             </div>
           ) : sessions.length === 0 ? (
-            <div className="text-center p-4 text-gray-400 text-xs">
-              No conversations yet
-            </div>
+            <div className="text-center p-4 text-gray-400 text-xs">No conversations yet</div>
           ) : (
             sessions.map((session) => (
               <div
                 key={session.id}
                 onClick={() => loadSession(session.id)}
                 className={`group flex items-start gap-2 p-3 cursor-pointer border-b border-gray-100 hover:bg-white transition-colors ${
-                  currentSessionId === session.id ? 'bg-white border-l-2 border-l-primary-500' : ''
+                  currentSessionId === session.id
+                    ? 'bg-white border-l-2 border-l-primary-500'
+                    : ''
                 }`}
               >
                 <MessageSquare className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
@@ -315,9 +406,8 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
         </div>
       </div>
 
-      {/* ── Main Chat Area ── */}
+      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-
         {/* Memory indicator */}
         {memoryEnabled && currentSessionId && (
           <div className="px-4 py-1.5 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
@@ -357,27 +447,32 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
               >
                 <div className="prose prose-sm max-w-none">
                   {message.role === 'assistant' ? (
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <>
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                      {/* NEW: Streaming blinker */}
+                      {message.isStreaming && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-primary-500 animate-pulse" />
+                      )}
+                    </>
                   ) : (
                     <p>{message.content}</p>
                   )}
                 </div>
 
                 {/* Sources */}
-                {message.sources && message.sources.length > 0 && (
+                {message.sources && message.sources.length > 0 && !message.isStreaming && (
                   <div className="mt-3 pt-3 border-t border-gray-200">
                     <p className="text-xs font-semibold mb-2">Sources:</p>
                     {message.sources.map((source, idx) => (
                       <div key={idx} className="text-xs mb-1">
-                        <span className="font-medium">{source.source}</span>:{' '}
-                        {source.text}
+                        <span className="font-medium">{source.source}</span>: {source.text}
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Correct button & Rating Buttons */}
-                {message.role === 'assistant' && (
+                {/* RESTORED: Correct button & Rating Buttons */}
+                {message.role === 'assistant' && !message.isStreaming && (
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200/50">
                     {onCorrect ? (
                       <button
@@ -390,10 +485,10 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
                         Correct this response
                       </button>
                     ) : (
-                      <span /> /* Empty spacer if no correct button */
+                      <span /> /* Empty spacer */
                     )}
 
-                    {/* Rating Buttons */}
+                    {/* RESTORED: Rating Buttons */}
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleRateMessage(message.id!, 1)}
@@ -401,7 +496,7 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
                           message.rating === 1 ? 'text-green-600 bg-green-50' : 'text-gray-400'
                         }`}
                         disabled={!message.id}
-                        title="Helpful"
+                        title={!message.id ? "Rating available after refresh" : "Helpful"}
                       >
                         <ThumbsUp className="w-4 h-4" />
                       </button>
@@ -411,7 +506,7 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
                           message.rating === -1 ? 'text-red-600 bg-red-50' : 'text-gray-400'
                         }`}
                         disabled={!message.id}
-                        title="Not helpful"
+                        title={!message.id ? "Rating available after refresh" : "Not helpful"}
                       >
                         <ThumbsDown className="w-4 h-4" />
                       </button>
@@ -422,7 +517,8 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
             </div>
           ))}
 
-          {isLoading && (
+          {/* Show loader only if NOT streaming (fallback) */}
+          {isLoading && !messages.some(m => m.isStreaming) && (
             <div className="flex justify-start">
               <div className="bg-gray-100 rounded-lg p-4">
                 <Loader2 className="w-5 h-5 animate-spin text-primary-500" />
@@ -457,7 +553,7 @@ export default function ChatInterface({ agentId, onCorrect }: ChatInterfaceProps
               disabled={isLoading || !input.trim()}
               className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isLoading ? (
+              {isLoading && !messages.some(m => m.isStreaming) ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <Send className="w-5 h-5" />
