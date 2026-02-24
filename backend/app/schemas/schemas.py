@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Dict, Any  # NEW: Added Dict and Any for Tools
 from datetime import datetime
 from uuid import UUID
 
@@ -34,7 +34,7 @@ class AgentCreate(BaseModel):
     name: str
     description: Optional[str] = None
     system_prompt: Optional[str] = None
-    output_template: Optional[str] = None  # NEW: Added for templates
+    output_template: Optional[str] = None  # Added for templates
     llm_provider: str = "openai"
     llm_model: str = "gpt-4"
     ollama_endpoint: Optional[str] = None
@@ -46,12 +46,20 @@ class AgentUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     system_prompt: Optional[str] = None
-    output_template: Optional[str] = None  # NEW: Added for templates
+    output_template: Optional[str] = None
     llm_provider: Optional[str] = None
     llm_model: Optional[str] = None
     ollama_endpoint: Optional[str] = None
     api_key: Optional[str] = None
     temperature: Optional[float] = None
+    
+    # ─────────────────────────────────────────
+    # NEW: Tool & Multi-Agent Settings
+    # ─────────────────────────────────────────
+    web_search_enabled: Optional[bool] = None
+    search_provider: Optional[str] = None
+    multi_agent_enabled: Optional[bool] = None
+    tavily_api_key: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -60,13 +68,21 @@ class AgentResponse(BaseModel):
     name: str
     description: Optional[str]
     system_prompt: Optional[str]
-    output_template: Optional[str]  # NEW: Added for templates
+    output_template: Optional[str]
     llm_provider: str
     llm_model: str
     ollama_endpoint: Optional[str]
     temperature: float
-    is_training: bool               # RESTORED: Needed for Fine-Tuning
+    is_training: bool
     created_at: datetime
+    
+    # ─────────────────────────────────────────
+    # NEW: Tool & Multi-Agent Settings
+    # ─────────────────────────────────────────
+    web_search_enabled: bool
+    search_provider: str
+    multi_agent_enabled: bool
+    tavily_api_key: Optional[str]
 
     class Config:
         from_attributes = True
@@ -243,10 +259,7 @@ class BulkUploadResponse(BaseModel):
     files: List[FileUploadStatus]
 
 
-# ─────────────────────────────────────────
-# NEW: Template Schemas
-# ─────────────────────────────────────────
-
+# Template Schemas
 class TemplateResponse(BaseModel):
     """Template displayed in gallery"""
     id: UUID
@@ -283,9 +296,43 @@ class TemplateCreate(BaseModel):
 class AgentFromTemplateRequest(BaseModel):
     """Create agent from template with customization"""
     template_id: UUID
-    name: str  # Required: User must name their agent
-    description: Optional[str] = None  # Optional: Uses template default if not provided
-    system_prompt: Optional[str] = None  # Optional: Uses template default if not provided
-    output_template: Optional[str] = None  # Optional: Uses template default if not provided
-    llm_provider: Optional[str] = None  # Optional: Uses template default
-    llm_model: Optional[str] = None  # Optional: Uses template default
+    name: str  
+    description: Optional[str] = None  
+    system_prompt: Optional[str] = None  
+    output_template: Optional[str] = None  
+    llm_provider: Optional[str] = None  
+    llm_model: Optional[str] = None  
+
+
+
+class ToolCreate(BaseModel):
+    name: str
+    description: str
+    tool_type: str  # 'web_search' or 'custom_api'
+    api_url: Optional[str] = None
+    method: str = "GET"
+    headers: Optional[Dict] = {}
+    auth_type: Optional[str] = None
+    auth_value: Optional[str] = None
+    request_body_template: Optional[Dict] = None
+    response_path: Optional[str] = None
+
+
+class ToolResponse(BaseModel):
+    id: UUID
+    agent_id: UUID
+    name: str
+    description: str
+    tool_type: str
+    api_url: Optional[str]
+    method: Optional[str]
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ToolTest(BaseModel):
+    """Test a tool before saving"""
+    parameters: Dict[str, Any]

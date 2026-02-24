@@ -30,9 +30,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      # 1. Tell the backend to accept requests from Mac's port 3001
+      CORS_ORIGINS: http://localhost:3001 
     ports:
-      - "8000:8000"
+      # 2. Map Mac's port 8001 to Container's port 8000
+      - "8001:8000"
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/vector_stores:/app/vector_stores
@@ -48,12 +50,16 @@ services:
       dockerfile: Dockerfile
     container_name: agentbuilder-frontend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # 3. Tell the frontend to send API requests to Mac's port 8001
+      NEXT_PUBLIC_API_URL: http://localhost:8001
     ports:
-      - "3000:3000"
+      # 4. Map Mac's port 3001 to Container's port 3000
+      - "3001:3000"
     depends_on:
       - backend
-    command: npm run dev
+    # 5. CRITICAL: Tells Next.js to listen to Docker's network router
+    command: npm run dev -- -H 0.0.0.0
 
+# THIS FIXES THE "INVALID COMPOSE PROJECT" ERROR
 volumes:
   postgres_data:

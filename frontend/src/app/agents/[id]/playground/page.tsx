@@ -13,12 +13,14 @@ import {
   Brain,
   SplitSquareHorizontal,
   TrendingUp,
+  Wrench, // Added for Tools icon
 } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import FileUploader from '@/components/FileUploader';
 import CorrectionModal from '@/components/CorrectionModal';
 import FineTuneUploader from '@/components/FineTuneUploader';
 import ModelComparison from '@/components/ModelComparison';
+import AgentTools from '@/components/AgentTools'; // NEW: Imported AgentTools
 import { agentAPI, knowledgeAPI, correctionAPI } from '@/lib/api';
 import type { Agent, KnowledgeBase, Correction } from '@/lib/types';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
@@ -29,7 +31,8 @@ export default function AgentPlayground() {
   const agentId = params.id as string;
 
   const [agent, setAgent] = useState<Agent | null>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune' | 'compare' | 'analytics'>('chat'); 
+  // UPDATED: Added 'settings' to activeTab type
+  const [activeTab, setActiveTab] = useState<'chat' | 'knowledge' | 'corrections' | 'finetune' | 'compare' | 'analytics' | 'settings'>('chat'); 
   const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeBase[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +63,29 @@ export default function AgentPlayground() {
       router.push('/dashboard');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // NEW: Handle Toggle for Web Search and Multi-Agent Mode
+  const handleToggleSetting = async (field: 'web_search_enabled' | 'multi_agent_enabled') => {
+    if (!agent) return;
+    
+    try {
+      const newValue = !agent[field];
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ [field]: newValue }),
+      });
+
+      if (response.ok) {
+        setAgent({ ...agent, [field]: newValue });
+      }
+    } catch (err) {
+      console.error("Failed to update agent setting:", err);
     }
   };
 
@@ -165,6 +191,19 @@ export default function AgentPlayground() {
                 </span>
               </button>
 
+              {/* NEW: Settings & Tools Sidebar Button */}
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  activeTab === 'settings'
+                    ? 'bg-primary-500 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Wrench className="w-5 h-5" />
+                <span className="font-medium">Settings & Tools</span>
+              </button>
+
               <button
                 onClick={() => setActiveTab('corrections')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -223,6 +262,66 @@ export default function AgentPlayground() {
             {activeTab === 'chat' && (
               <div className="h-[calc(100vh-200px)]">
                 <ChatInterface agentId={agentId} onCorrect={handleCorrect} />
+              </div>
+            )}
+
+            {/* NEW: Settings & Tools Content Tab */}
+            {activeTab === 'settings' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">
+                    Workforce Configuration
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    {/* Web Search Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <h3 className="font-medium text-gray-900">Web Search</h3>
+                        <p className="text-sm text-gray-600">
+                          Allow agent to search the internet for current information
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToggleSetting('web_search_enabled')}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                          agent.web_search_enabled ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            agent.web_search_enabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Multi-Agent Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <h3 className="font-medium text-gray-900">Multi-Agent Mode</h3>
+                        <p className="text-sm text-gray-600">
+                          Use multiple specialized agents working together
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToggleSetting('multi_agent_enabled')}
+                        className={`relative w-12 h-6 rounded-full transition-colors ${
+                          agent.multi_agent_enabled ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                            agent.multi_agent_enabled ? 'translate-x-6' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom API Tools List Component */}
+                <AgentTools agentId={agentId} />
               </div>
             )}
 

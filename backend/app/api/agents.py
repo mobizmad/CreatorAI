@@ -54,36 +54,14 @@ async def list_agents(
     agents = db.query(Agent).filter(Agent.user_id == current_user.id).all()
     return agents
 
-
-@router.get("/{agent_id}", response_model=AgentResponse)
-async def get_agent(
-    agent_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Get a specific agent"""
-    agent = (
-        db.query(Agent)
-        .filter(Agent.id == agent_id, Agent.user_id == current_user.id)
-        .first()
-    )
-
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
-
-    return agent
-
-
-@router.put("/{agent_id}", response_model=AgentResponse)
+@router.patch("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
     agent_id: UUID,
     agent_data: AgentUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update an agent"""
+    """Update an agent (handles partial updates for toggles)"""
     agent = (
         db.query(Agent)
         .filter(Agent.id == agent_id, Agent.user_id == current_user.id)
@@ -95,8 +73,8 @@ async def update_agent(
             status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
         )
 
-    # Update fields
     update_data = agent_data.model_dump(exclude_unset=True)
+    
     for field, value in update_data.items():
         setattr(agent, field, value)
 
@@ -105,6 +83,55 @@ async def update_agent(
 
     return agent
 
+@router.get("/{agent_id}", response_model=AgentResponse)
+async def get_agent(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a specific agent (This allows the Playground to load)"""
+    agent = (
+        db.query(Agent)
+        .filter(Agent.id == agent_id, Agent.user_id == current_user.id)
+        .first()
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
+        )
+
+    return agent
+
+
+@router.patch("/{agent_id}", response_model=AgentResponse)
+async def update_agent(
+    agent_id: UUID,
+    agent_data: AgentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an agent (This allows the toggles to save)"""
+    agent = (
+        db.query(Agent)
+        .filter(Agent.id == agent_id, Agent.user_id == current_user.id)
+        .first()
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
+        )
+
+    # Partial update logic
+    update_data = agent_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(agent, field, value)
+
+    db.commit()
+    db.refresh(agent)
+
+    return agent
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent(

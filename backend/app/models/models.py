@@ -35,7 +35,16 @@ class Agent(Base):
     temperature = Column(Float, default=0.7)
     memory_enabled = Column(Boolean, default=True)   #  memory feature
     memory_window = Column(Integer, default=10)       #  how many past messages to remember
-    output_template = Column(Text, nullable=True)     # NEW: Added for templates
+    output_template = Column(Text, nullable=True)     # Added for templates
+    
+    # ─────────────────────────────────────────
+    # NEW: Tool & Multi-Agent Settings
+    # ─────────────────────────────────────────
+    web_search_enabled = Column(Boolean, default=False)
+    search_provider = Column(String, default="duckduckgo")
+    multi_agent_enabled = Column(Boolean, default=False)
+    tavily_api_key = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     is_training = Column(Boolean, default=False)
 
@@ -44,9 +53,38 @@ class Agent(Base):
     corrections = relationship("Correction", back_populates="agent", cascade="all, delete-orphan")
     chat_logs = relationship("ChatLog", back_populates="agent", cascade="all, delete-orphan")
     sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")
+    tools = relationship("AgentTool", back_populates="agent", cascade="all, delete-orphan") # NEW
 
 
-# NEW MODEL: Pre-configured agent templates
+# ─────────────────────────────────────────
+# NEW MODEL: Custom API Tools
+# ─────────────────────────────────────────
+class AgentTool(Base):
+    """Custom API tools configured by users"""
+    __tablename__ = "agent_tools"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"))
+    
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    tool_type = Column(String, nullable=False)  # 'web_search', 'custom_api'
+    
+    # API configuration
+    api_url = Column(String)
+    method = Column(String, default="GET")
+    headers = Column(JSON)
+    auth_type = Column(String)
+    auth_value = Column(String)  # The actual secret key
+    request_body_template = Column(JSON)
+    response_path = Column(String)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    agent = relationship("Agent", back_populates="tools")
+
+
 class AgentTemplate(Base):
     """Pre-configured agent templates for quick setup"""
     __tablename__ = "agent_templates"
