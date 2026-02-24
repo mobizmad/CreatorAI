@@ -30,18 +30,19 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
-      # 1. Tell the backend to accept requests from Mac's port 3001
+      # Tell the backend to accept requests from Host port 3001
       CORS_ORIGINS: http://localhost:3001 
     ports:
-      # 2. Map Mac's port 8001 to Container's port 8000
-      - "8001:8000"
+      # Symmetrical mapping: Host 8001 -> Container 8001
+      - "8001:8001"
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/vector_stores:/app/vector_stores
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Start Uvicorn on port 8001 inside the container
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
   # Frontend
   frontend:
@@ -50,16 +51,15 @@ services:
       dockerfile: Dockerfile
     container_name: agentbuilder-frontend
     environment:
-      # 3. Tell the frontend to send API requests to Mac's port 8001
+      # Tell the frontend to send API requests to Host port 8001
       NEXT_PUBLIC_API_URL: http://localhost:8001
     ports:
-      # 4. Map Mac's port 3001 to Container's port 3000
-      - "3001:3000"
+      # Symmetrical mapping: Host 3001 -> Container 3001
+      - "3001:3001"
     depends_on:
       - backend
-    # 5. CRITICAL: Tells Next.js to listen to Docker's network router
-    command: npm run dev -- -H 0.0.0.0
+    # Start Next.js on port 3001 inside the container
+    command: npm run dev -- -p 3001 -H 0.0.0.0
 
-# THIS FIXES THE "INVALID COMPOSE PROJECT" ERROR
 volumes:
   postgres_data:
