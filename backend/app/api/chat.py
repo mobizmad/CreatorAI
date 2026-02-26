@@ -21,6 +21,11 @@ from app.api.auth import get_current_user
 from app.core.agent_graph import AgentExecutor
 from app.services.vector_store import VectorStoreService
 
+# ─────────────────────────────────────────
+# NEW: Import Multi-Agent Executor
+# ─────────────────────────────────────────
+from app.core.multi_agent_graph import MultiAgentExecutor
+
 router = APIRouter(prefix="/agents/{agent_id}/chat", tags=["Chat"])
 
 
@@ -121,11 +126,11 @@ async def delete_session(
 
 
 # ─────────────────────────────────────────
-# Chat Endpoint with Streaming Support
+# Chat Endpoint with Multi-Agent Support
 # ─────────────────────────────────────────
 
 async def stream_response(
-    executor: AgentExecutor,
+    executor,  # Can be AgentExecutor or MultiAgentExecutor
     message: str,
     agent_id: UUID,
     session_id: UUID,
@@ -146,7 +151,7 @@ async def stream_response(
                 
                 # Send token to client
                 yield f"data: {json.dumps({'token': token, 'sources': None})}\n\n"
-                await asyncio.sleep(0)  # Allow other tasks to run
+                await asyncio.sleep(0)
                 
             elif chunk["type"] == "sources":
                 sources = chunk["content"]
@@ -169,7 +174,7 @@ async def stream_response(
                 user_message=message,
                 agent_response=full_response,
                 sources={"sources": sources},
-                rating=0, # <-- RESTORED: Needed for your rating system
+                rating=0,
             )
             db.add(chat_log)
             
@@ -196,6 +201,9 @@ async def chat_with_agent(
 ):
     """
     Send a message to an agent and get a response
+    
+    NEW: Automatically uses Multi-Agent Mode if enabled
+    NEW: Automatically enables Web Search if enabled
     """
     agent = verify_agent_access(agent_id, current_user.id, db)
 
@@ -223,15 +231,32 @@ async def chat_with_agent(
 
     try:
         vector_store = VectorStoreService()
-        executor = AgentExecutor(
-            agent_id=str(agent_id),
-            db=db,
-            vector_store=vector_store,
-            session_id=str(session_id),
-            model_override=message.model_override # <-- RESTORED: Needed for A/B Testing
-        )
         
-        # Check if streaming is requested (using getattr just in case schema isn't updated yet)
+        # ─────────────────────────────────────────
+        # NEW: Choose executor based on agent settings
+        # ─────────────────────────────────────────
+        if agent.multi_agent_enabled:
+            # Use Multi-Agent Workforce
+            print(f"✅ Using Multi-Agent Mode for agent {agent_id}")
+            executor = MultiAgentExecutor(
+                agent_id=str(agent_id),
+                db=db,
+                vector_store=vector_store,
+            )
+        else:
+            # Use Single Agent (original behavior)
+            print(f"ℹ️ Using Single Agent Mode for agent {agent_id}")
+            executor = AgentExecutor(
+                agent_id=str(agent_id),
+                db=db,
+                vector_store=vector_store,
+                session_id=str(session_id),
+                model_override=message.model_override
+            )
+        
+        # ─────────────────────────────────────────
+        # Handle Streaming vs Non-Streaming
+        # ─────────────────────────────────────────
         if getattr(message, "stream", False):
             return StreamingResponse(
                 stream_response(executor, message.message, agent_id, session_id, db),
@@ -239,7 +264,7 @@ async def chat_with_agent(
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                    "X-Accel-Buffering": "no",
                 }
             )
         
@@ -252,7 +277,7 @@ async def chat_with_agent(
             user_message=message.message,
             agent_response=result["response"],
             sources={"sources": result["sources"]},
-            rating=0, # <-- RESTORED: Needed for your rating system
+            rating=0,
         )
         db.add(chat_log)
 
@@ -264,16 +289,17 @@ async def chat_with_agent(
             session.title = title + "..." if len(message.message) > 60 else title
 
         db.commit()
-        db.refresh(chat_log) # <-- RESTORED: We need the ID for the ChatResponse
+        db.refresh(chat_log)
 
         return ChatResponse(
             response=result["response"],
             sources=result.get("sources", []),
             session_id=str(session_id),
-            message_id=chat_log.id, # <-- RESTORED: Needed for frontend ratings
+            message_id=chat_log.id,
         )
 
     except Exception as e:
+        print(f"❌ Chat error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing chat: {str(e)}",
@@ -316,7 +342,7 @@ async def clear_chat_history(
 
 
 @router.post("/{message_id}/rate", response_model=ChatLogResponse)
-async def rate_message( # <-- RESTORED: The entire rating endpoint they deleted!
+async def rate_message(
     agent_id: UUID,
     message_id: UUID,
     rating_data: ChatRatingRequest,

@@ -66,6 +66,37 @@ export default function AgentPlayground() {
     }
   };
 
+  // NEW: State for editing agent details
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
+
+  // NEW: Function to save name, description, and system prompt
+  const handleSaveDetails = async () => {
+    if (!agent) return;
+    setIsSavingDetails(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          name: agent.name,
+          description: agent.description,
+          system_prompt: agent.system_prompt,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update agent');
+      alert('Agent details updated successfully!');
+    } catch (err) {
+      console.error("Failed to update agent:", err);
+      alert('Failed to save changes.');
+    } finally {
+      setIsSavingDetails(false);
+    }
+  };
+
   // NEW: Handle Toggle for Web Search and Multi-Agent Mode
   const handleToggleSetting = async (field: 'web_search_enabled' | 'multi_agent_enabled') => {
     if (!agent) return;
@@ -268,6 +299,55 @@ export default function AgentPlayground() {
             {/* NEW: Settings & Tools Content Tab */}
             {activeTab === 'settings' && (
               <div className="space-y-6">
+                {/* NEW: Core Identity Editing Block */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-gray-900">Core Identity</h2>
+                    <button
+                      onClick={handleSaveDetails}
+                      disabled={isSavingDetails}
+                      className="px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {isSavingDetails ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                      ) : (
+                        'Save Changes'
+                      )}
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Agent Name</label>
+                      <input
+                        type="text"
+                        value={agent.name}
+                        onChange={(e) => setAgent({ ...agent, name: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <input
+                        type="text"
+                        value={agent.description || ''}
+                        onChange={(e) => setAgent({ ...agent, description: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">System Prompt</label>
+                      <textarea
+                        value={agent.system_prompt || ''}
+                        onChange={(e) => setAgent({ ...agent, system_prompt: e.target.value })}
+                        rows={6}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Existing Workforce Configuration Block */}
                 <div className="bg-white rounded-lg shadow p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-6">
                     Workforce Configuration

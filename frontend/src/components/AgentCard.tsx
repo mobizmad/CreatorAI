@@ -73,13 +73,6 @@ export default function AgentCard({ agent, onDelete }: AgentCardProps) {
         {/* Actions */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push(`/agents/${agent.id}`)}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-            title="Edit agent"
-          >
-            <Edit className="w-5 h-5" />
-          </button>
-          <button
             onClick={handleDelete}
             disabled={isDeleting}
             className="p-2 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
