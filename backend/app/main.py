@@ -7,6 +7,7 @@ from app.config import settings
 from app.db.database import init_db
 from app.api import auth, agents, knowledge, chat, corrections
 from app.api import auth, agents, knowledge, chat, corrections, api_keys, public_api,templates, tools
+from app.api.marketplace import router as marketplace_router
 from app.api import analytics
 from app.services.rate_limiter import init_rate_limiter
 
@@ -56,6 +57,7 @@ app.include_router(analytics.router)
 app.include_router(templates.router)
 app.include_router(tools.router)
 app.include_router(widget_router)
+app.include_router(marketplace_router)
 
 
 @app.get("/")

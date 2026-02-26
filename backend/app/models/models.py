@@ -44,6 +44,7 @@ class Agent(Base):
     search_provider = Column(String, default="duckduckgo")
     multi_agent_enabled = Column(Boolean, default=False)
     is_public = Column(Boolean, default=False)
+    category = Column(String, default="General")
     tavily_api_key = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -202,3 +203,17 @@ class AgentAPIKey(Base):
         """Verify an API key against its hash"""
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         return pwd_context.verify(plain_key, hashed_key)
+    
+class MarketplaceReview(Base):
+    """User reviews for marketplace agents"""
+    __tablename__ = "marketplace_reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    agent = relationship("Agent", backref="marketplace_reviews")
+    reviewer = relationship("User", backref="reviews_given")
