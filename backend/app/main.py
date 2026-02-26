@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from app.api.widget import router as widget_router
 
 from app.config import settings
 from app.db.database import init_db
@@ -54,6 +55,7 @@ app.include_router(public_api.router)
 app.include_router(analytics.router)
 app.include_router(templates.router)
 app.include_router(tools.router)
+app.include_router(widget_router)
 
 
 @app.get("/")

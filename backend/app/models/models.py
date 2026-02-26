@@ -43,6 +43,7 @@ class Agent(Base):
     web_search_enabled = Column(Boolean, default=False)
     search_provider = Column(String, default="duckduckgo")
     multi_agent_enabled = Column(Boolean, default=False)
+    is_public = Column(Boolean, default=False)
     tavily_api_key = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -20,7 +20,8 @@ import FileUploader from '@/components/FileUploader';
 import CorrectionModal from '@/components/CorrectionModal';
 import FineTuneUploader from '@/components/FineTuneUploader';
 import ModelComparison from '@/components/ModelComparison';
-import AgentTools from '@/components/AgentTools'; // NEW: Imported AgentTools
+import AgentTools from '@/components/AgentTools'; 
+import PublishWidget from '@/components/PublishWidget';
 import { agentAPI, knowledgeAPI, correctionAPI } from '@/lib/api';
 import type { Agent, KnowledgeBase, Correction } from '@/lib/types';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
@@ -98,7 +99,7 @@ export default function AgentPlayground() {
   };
 
   // NEW: Handle Toggle for Web Search and Multi-Agent Mode
-  const handleToggleSetting = async (field: 'web_search_enabled' | 'multi_agent_enabled') => {
+  const handleToggleSetting = async (field: 'web_search_enabled' | 'multi_agent_enabled' | 'is_public') => {
     if (!agent) return;
     
     try {
@@ -346,6 +347,13 @@ export default function AgentPlayground() {
                     </div>
                   </div>
                 </div>
+
+                {/* NEW: Publish & Embed Widget */}
+                <PublishWidget
+                  agentId={agentId}
+                  isPublic={agent.is_public || false}
+                  onToggle={async () => handleToggleSetting('is_public')}
+                />
 
                 {/* Existing Workforce Configuration Block */}
                 <div className="bg-white rounded-lg shadow p-6">

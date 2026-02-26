@@ -52,6 +52,7 @@ class AgentUpdate(BaseModel):
     ollama_endpoint: Optional[str] = None
     api_key: Optional[str] = None
     temperature: Optional[float] = None
+    is_public: Optional[bool] = None
     
     # ─────────────────────────────────────────
     # NEW: Tool & Multi-Agent Settings
@@ -75,6 +76,7 @@ class AgentResponse(BaseModel):
     temperature: float
     is_training: bool
     created_at: datetime
+    is_public: bool
     
     # ─────────────────────────────────────────
     # NEW: Tool & Multi-Agent Settings
