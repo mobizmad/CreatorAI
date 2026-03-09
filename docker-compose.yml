@@ -30,10 +30,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
-      # Tell the backend to accept requests from Host port 3001
-      CORS_ORIGINS: http://localhost:3001 
+      # UPDATED: Added your public frontend URL to the allowed origins
+      CORS_ORIGINS: "https://aicreate.ibechamp.com,http://localhost:3001"
     ports:
-      # Symmetrical mapping: Host 8001 -> Container 8001
       - "8001:8001"
     volumes:
       - ./backend/uploads:/app/uploads
@@ -41,7 +40,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Start Uvicorn on port 8001 inside the container
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
   # Frontend
@@ -51,14 +49,12 @@ services:
       dockerfile: Dockerfile
     container_name: agentbuilder-frontend
     environment:
-      # Tell the frontend to send API requests to Host port 8001
-      NEXT_PUBLIC_API_URL: http://localhost:8001
+      # UPDATED: Frontend now talks to the public Cloudflare backend URL
+      NEXT_PUBLIC_API_URL: "https://aicreateback.ibechamp.com"
     ports:
-      # Symmetrical mapping: Host 3001 -> Container 3001
       - "3001:3001"
     depends_on:
       - backend
-    # Start Next.js on port 3001 inside the container
     command: npm run dev -- -p 3001 -H 0.0.0.0
 
 volumes:
