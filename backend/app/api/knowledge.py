@@ -7,8 +7,17 @@ import shutil
 import asyncio
 
 from app.db.database import get_db
-from app.models.models import User, Agent, KnowledgeBase
-from app.schemas.schemas import KnowledgeBaseResponse, BulkUploadResponse, FileUploadStatus
+from app.models.models import User, Agent, KnowledgeBase, KnowledgeFolder
+from app.schemas.schemas import (
+    KnowledgeBaseResponse, 
+    BulkUploadResponse, 
+    FileUploadStatus,
+    FolderResponse,
+    FolderCreate,
+    FolderUpdate,
+    FileMoveRequest,
+    KnowledgeCombinedResponse
+)
 from app.api.auth import get_current_user
 from app.services.document_processor import DocumentProcessor
 from app.services.vector_store import VectorStoreService
@@ -220,22 +229,71 @@ async def upload_knowledge(
             detail=f"Error processing file: {str(e)}",
         )
 
-
-@router.get("", response_model=List[KnowledgeBaseResponse])
+# Update the existing GET route
+@router.get("", response_model=KnowledgeCombinedResponse) 
 async def list_knowledge(
     agent_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all knowledge base files for an agent"""
+    """List all files and folders for an agent"""
     verify_agent_access(agent_id, current_user.id, db)
 
-    knowledge_bases = (
-        db.query(KnowledgeBase).filter(KnowledgeBase.agent_id == agent_id).all()
-    )
+    files = db.query(KnowledgeBase).filter(KnowledgeBase.agent_id == agent_id).all()
+    folders = db.query(KnowledgeFolder).filter(KnowledgeFolder.agent_id == agent_id).all()
 
-    return knowledge_bases
+    return {"files": files, "folders": folders}
 
+# --- Folder Routes ---
+
+@router.post("/folders", response_model=FolderResponse)
+async def create_folder(
+    agent_id: UUID,
+    folder: FolderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_access(agent_id, current_user.id, db)
+    new_folder = KnowledgeFolder(agent_id=agent_id, name=folder.name, parent_id=folder.parent_id)
+    db.add(new_folder)
+    db.commit()
+    db.refresh(new_folder)
+    return new_folder
+
+@router.put("/folders/{folder_id}", response_model=FolderResponse)
+async def rename_folder(
+    agent_id: UUID,
+    folder_id: UUID,
+    update_data: FolderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_access(agent_id, current_user.id, db)
+    folder = db.query(KnowledgeFolder).filter(KnowledgeFolder.id == folder_id, KnowledgeFolder.agent_id == agent_id).first()
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    folder.name = update_data.name
+    db.commit()
+    db.refresh(folder)
+    return folder
+
+@router.put("/{knowledge_id}/move")
+async def move_file(
+    agent_id: UUID,
+    knowledge_id: UUID,
+    move_data: FileMoveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_access(agent_id, current_user.id, db)
+    file = db.query(KnowledgeBase).filter(KnowledgeBase.id == knowledge_id, KnowledgeBase.agent_id == agent_id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file.folder_id = move_data.folder_id
+    db.commit()
+    return {"success": True}
 
 @router.delete("/{knowledge_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_knowledge(
@@ -267,3 +325,26 @@ async def delete_knowledge(
     db.commit()
 
     return None
+
+
+@router.delete("/folders/{folder_id}")
+async def delete_folder(
+    agent_id: UUID,
+    folder_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_access(agent_id, current_user.id, db)
+    
+    folder = db.query(KnowledgeFolder).filter(
+        KnowledgeFolder.id == folder_id, 
+        KnowledgeFolder.agent_id == agent_id
+    ).first()
+    
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    db.delete(folder)
+    db.commit()
+    
+    return {"success": True}

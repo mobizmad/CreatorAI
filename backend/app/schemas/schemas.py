@@ -89,11 +89,30 @@ class AgentResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class FolderCreate(BaseModel):
+    name: str
+    parent_id: Optional[UUID] = None
+
+class FolderUpdate(BaseModel):
+    name: str
+
+class FolderResponse(BaseModel):
+    id: UUID
+    name: str
+    parent_id: Optional[UUID]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FileMoveRequest(BaseModel):
+    folder_id: Optional[UUID] = None
 
 # Knowledge Base Schemas
 class KnowledgeBaseResponse(BaseModel):
     id: UUID
     agent_id: UUID
+    folder_id: Optional[UUID] = None  # NEW
     filename: str
     file_type: str
     chunk_count: int
@@ -101,6 +120,11 @@ class KnowledgeBaseResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Add a schema for the combined GET response
+class KnowledgeCombinedResponse(BaseModel):
+    files: List[KnowledgeBaseResponse]
+    folders: List[FolderResponse]
 
 
 # Correction Schemas
