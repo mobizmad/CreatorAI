@@ -131,6 +131,7 @@ class KnowledgeBase(Base):
     filename = Column(String, nullable=False)
     file_type = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
+    size = Column(Integer, nullable=False, default=0)
     chunk_count = Column(Integer, default=0)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 

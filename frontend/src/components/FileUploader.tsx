@@ -258,6 +258,62 @@ function FileGridCard({ f, onDelete }: { f: KBFile; onDelete: () => void }) {
   );
 }
 
+function FolderListRow({
+  folder,
+  fileCount,
+  onOpen,
+  onRename,
+  onDelete,
+  onDropFiles,
+}: {
+  folder: KBFolder;
+  fileCount: number;
+  onOpen: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onDropFiles: (fileIds: string[], folderId: string) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const color = folderColor(folder.id);
+
+  return (
+    <div
+      onDoubleClick={onOpen}
+      onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOver(false);
+        const ids = e.dataTransfer.getData('fileIds');
+        if (ids) onDropFiles(JSON.parse(ids), folder.id);
+      }}
+      className="group grid items-center px-5 py-3 cursor-pointer transition-colors"
+      style={{
+        gridTemplateColumns: '24px 1fr 70px 90px 100px 90px',
+        background: dragOver ? '#e6f4ff' : undefined
+      }}
+      onMouseEnter={e => !dragOver && ((e.currentTarget as HTMLElement).style.background = '#f9fafb')}
+      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = dragOver ? '#e6f4ff' : '')}>
+      <Folder className="w-4 h-4 flex-shrink-0" style={{ color }} />
+      <span className="text-sm font-semibold text-gray-700 truncate">{folder.name}</span>
+      <span className="text-xs text-gray-400">Folder</span>
+      <span className="text-xs text-gray-400">{fileCount} items</span>
+      <span className="text-xs text-gray-400">{formatDate(folder.createdAt)}</span>
+      <div className="flex items-center gap-1.5">
+        <button onClick={e => { e.stopPropagation(); onRename(); }}
+          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-100 transition-all">
+          <Edit2 className="w-3 h-3 text-gray-400" />
+        </button>
+        <button onClick={e => { e.stopPropagation(); onDelete(); }}
+          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 transition-all">
+          <Trash2 className="w-3 h-3 text-red-400" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploaderProps) {
@@ -274,6 +330,9 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
   const [renameTarget, setRenameTarget] = useState<KBFolder | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+
+  const hasUnsavedUploads =
+    isUploading || files.some(f => f.status === 'pending' || f.status === 'uploading');
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
@@ -302,6 +361,78 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+    // Warn user if they try to refresh / close tab while files are pending or uploading
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedUploads) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedUploads]);
+
+  // Warn user if they navigate away inside the app while files are pending or uploading
+  useEffect(() => {
+    if (!hasUnsavedUploads) return;
+
+    const message = 'You have pending or uploading files. Leaving this page will lose them.';
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const anchor = target.closest('a') as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      // Ignore special cases
+      if (
+        anchor.target === '_blank' ||
+        anchor.hasAttribute('download') ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const isSamePage =
+        anchor.pathname === window.location.pathname &&
+        anchor.search === window.location.search;
+
+      if (isSamePage) return;
+
+      const ok = window.confirm(message);
+      if (!ok) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    const handlePopState = () => {
+      const ok = window.confirm(message);
+      if (!ok) {
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    // Push one state so back button can be intercepted
+    window.history.pushState(null, '', window.location.href);
+
+    document.addEventListener('click', handleDocumentClick, true);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.removeEventListener('click', handleDocumentClick, true);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [hasUnsavedUploads]);
+
   // ── Stage new files ────────────────────────────────────────────────────────
 
   const stageFiles = useCallback((incoming: File[]) => {
@@ -309,7 +440,7 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
     for (const f of incoming) {
       const ext = getExt(f.name);
       if (!['pdf', 'txt', 'csv', 'docx', 'md'].includes(ext)) continue;
-      if (f.size > 10 * 1024 * 1024) continue;
+      if (f.size > 40 * 1024 * 1024) continue;
       if (files.some(x => x.name === f.name && x.folderId === currentFolderId)) continue;
       valid.push({
         id: `local-${Date.now()}-${Math.random()}`,
@@ -441,7 +572,6 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
     try {
       const formData = new FormData();
       pending.forEach(f => f.file && formData.append('files', f.file));
-      formData.append('folder_ids', JSON.stringify(pending.map(f => f.folderId)));
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/knowledge/bulk`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -716,34 +846,16 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
               {visibleFolders.map(f => {
                 const folder = folders.find(x => x.id === f.id)!;
                 const count = files.filter(x => x.folderId === f.id).length;
-                const color = folderColor(f.id);
-                const [dragOver, setDragOver] = useState(false);
                 return (
-                  <div key={f.id}
-                    onDoubleClick={() => { setCurrentFolderId(f.id); setSearchQuery(''); }}
-                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={e => { e.preventDefault(); e.stopPropagation(); setDragOver(false); const ids = e.dataTransfer.getData('fileIds'); if (ids) onDropFilesIntoFolder(JSON.parse(ids), f.id); }}
-                    className="group grid items-center px-5 py-3 cursor-pointer transition-colors"
-                    style={{ gridTemplateColumns: '24px 1fr 70px 90px 100px 90px', background: dragOver ? '#e6f4ff' : undefined }}
-                    onMouseEnter={e => !dragOver && ((e.currentTarget as HTMLElement).style.background = '#f9fafb')}
-                    onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = dragOver ? '#e6f4ff' : '')}>
-                    <Folder className="w-4 h-4 flex-shrink-0" style={{ color }} />
-                    <span className="text-sm font-semibold text-gray-700 truncate">{folder.name}</span>
-                    <span className="text-xs text-gray-400">Folder</span>
-                    <span className="text-xs text-gray-400">{count} items</span>
-                    <span className="text-xs text-gray-400">{formatDate(folder.createdAt)}</span>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={e => { e.stopPropagation(); setRenameTarget(folder); }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-100 transition-all">
-                        <Edit2 className="w-3 h-3 text-gray-400" />
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); deleteFolder(f.id); }}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 transition-all">
-                        <Trash2 className="w-3 h-3 text-red-400" />
-                      </button>
-                    </div>
-                  </div>
+                  <FolderListRow
+                    key={f.id}
+                    folder={folder}
+                    fileCount={count}
+                    onOpen={() => { setCurrentFolderId(f.id); setSearchQuery(''); }}
+                    onRename={() => setRenameTarget(folder)}
+                    onDelete={() => deleteFolder(f.id)}
+                    onDropFiles={onDropFilesIntoFolder}
+                  />
                 );
               })}
 
@@ -789,14 +901,14 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
             <span>{folders.length} folder{folders.length !== 1 ? 's' : ''}</span>
             {pendingCount > 0 && <><span>·</span><span className="text-amber-500 font-semibold">{pendingCount} pending upload</span></>}
           </div>
-          <span className="text-xs text-gray-300">PDF · TXT · CSV · DOCX · MD · Max 10MB</span>
+          <span className="text-xs text-gray-300">PDF · TXT · CSV · DOCX · MD · Max 40MB</span>
         </div>
       </div>
 
       {/* ── Modals ── */}
       {showNewFolder && <NewFolderModal onCreate={createFolder} onClose={() => setShowNewFolder(false)} />}
       {renameTarget && <RenameModal current={renameTarget.name} onRename={n => renameFolder(renameTarget.id, n)} onClose={() => setRenameTarget(null)} />}
-
+      
       <input ref={fileInputRef} type="file" accept=".pdf,.txt,.csv,.docx,.md" multiple
         onChange={e => { stageFiles(Array.from(e.target.files || [])); e.target.value = ''; }}
         className="hidden" />

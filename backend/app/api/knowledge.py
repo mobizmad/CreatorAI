@@ -96,11 +96,13 @@ async def process_single_file(
             filename=filename,
             file_type=file_extension,
             file_path=file_path,
+            size=file_size,
             chunk_count=chunk_count,
         )
 
         db.add(knowledge_base)
         db.commit()
+        db.refresh(knowledge_base)
 
         return FileUploadStatus(
             filename=filename,
@@ -212,6 +214,7 @@ async def upload_knowledge(
             filename=file.filename,
             file_type=file_extension,
             file_path=file_path,
+            size=file_size,
             chunk_count=chunk_count,
         )
 
