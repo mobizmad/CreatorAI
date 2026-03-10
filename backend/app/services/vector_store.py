@@ -3,6 +3,7 @@ from langchain_community.vectorstores import FAISS
 from typing import List
 import os
 import shutil
+import asyncio
 from app.config import settings
 
 
@@ -51,19 +52,11 @@ class VectorStoreService:
         self, agent_id: str, chunks: List[dict]
     ) -> int:
         """
-        Add document chunks to the vector store
-
-        Args:
-            agent_id: Agent UUID
-            chunks: List of chunks with text and metadata
-
-        Returns:
-            Number of chunks added
+        Add document chunks to the vector store using safe batching
         """
         if not self.embeddings:
             raise Exception("Embeddings not initialized. Please set OPENAI_API_KEY.")
 
-        # Convert chunks to LangChain Document format
         from langchain.schema import Document
 
         documents = [
@@ -71,24 +64,36 @@ class VectorStoreService:
             for chunk in chunks
         ]
 
-        # Load existing vector store or create new one
-        existing_store = self._load_vector_store(agent_id)
+        # Load existing vector store
+        vectorstore = self._load_vector_store(agent_id)
 
-        if existing_store:
-            # Add to existing store
-            existing_store.add_documents(documents)
-            vectorstore = existing_store
-        else:
-            # Create new store
-            vectorstore = FAISS.from_documents(
-                documents=documents,
-                embedding=self.embeddings,
-            )
+        batch_size = 100 # Safe number of chunks to embed per API call
+        total_docs = len(documents)
+        print(f"Starting batch embedding for {total_docs} chunks...")
 
-        # Save to disk
-        self._save_vector_store(agent_id, vectorstore)
+        # Process the chunks in small batches
+        for i in range(0, total_docs, batch_size):
+            batch = documents[i : i + batch_size]
+            if vectorstore:
+                # Use asyncio.to_thread so we don't freeze the FastAPI server!
+                await asyncio.to_thread(vectorstore.add_documents, batch)
+            else:
+                # Create the store using the very first batch
+                vectorstore = await asyncio.to_thread(
+                    FAISS.from_documents,
+                    documents=batch,
+                    embedding=self.embeddings,
+                )
+            print(f"Embedded batch {i} to {min(i + batch_size, total_docs)}...")
+            # THE LIFESAVER: Pause to avoid OpenAI Rate Limit (429) errors
+            await asyncio.sleep(1)
 
-        return len(chunks)
+        # Save to disk only after all batches are safely processed
+        if vectorstore:
+            await asyncio.to_thread(self._save_vector_store, agent_id, vectorstore)
+
+        print(f"Successfully finished embedding {total_docs} chunks!")
+        return total_docs
 
     async def similarity_search(
         self, agent_id: str, query: str, k: int = 4

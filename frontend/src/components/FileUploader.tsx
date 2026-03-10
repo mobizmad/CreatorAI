@@ -437,11 +437,17 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
 
   const stageFiles = useCallback((incoming: File[]) => {
     const valid: KBFile[] = [];
+    const duplicates: string[] = [];
+
     for (const f of incoming) {
       const ext = getExt(f.name);
       if (!['pdf', 'txt', 'csv', 'docx', 'md'].includes(ext)) continue;
-      if (f.size > 40 * 1024 * 1024) continue;
-      if (files.some(x => x.name === f.name && x.folderId === currentFolderId)) continue;
+      // Check if the file already exists anywhere in the agent's knowledge base
+      const isDuplicate = files.some(x => x.name === f.name);
+      if (isDuplicate) {
+        duplicates.push(f.name);
+        continue;
+      }
       valid.push({
         id: `local-${Date.now()}-${Math.random()}`,
         name: f.name, size: f.size, ext,
@@ -450,6 +456,9 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
         uploadedAt: new Date(),
         file: f,
       });
+    }
+    if (duplicates.length > 0) {
+      alert(`The following files already exist and were skipped:\n\n${duplicates.join('\n')}`);
     }
     setFiles(prev => [...prev, ...valid]);
   }, [files, currentFolderId]);
@@ -901,7 +910,7 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
             <span>{folders.length} folder{folders.length !== 1 ? 's' : ''}</span>
             {pendingCount > 0 && <><span>·</span><span className="text-amber-500 font-semibold">{pendingCount} pending upload</span></>}
           </div>
-          <span className="text-xs text-gray-300">PDF · TXT · CSV · DOCX · MD · Max 40MB</span>
+          <span className="text-xs text-gray-300">PDF · TXT · CSV · DOCX · MD · Unlimited Size</span>
         </div>
       </div>
 

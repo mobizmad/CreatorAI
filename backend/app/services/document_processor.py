@@ -2,6 +2,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, CSVLoader
 from typing import List
 import os
+import asyncio
 
 
 class DocumentProcessor:
@@ -44,9 +45,9 @@ class DocumentProcessor:
             raise ValueError(f"Unsupported file type: {file_type}")
 
         try:
-            # Load and split documents
-            documents = loader.load()
-            chunks = self.text_splitter.split_documents(documents)
+            # CRITICAL FIX: Run synchronous Langchain tasks in a separate thread!
+            documents = await asyncio.to_thread(loader.load)
+            chunks = await asyncio.to_thread(self.text_splitter.split_documents, documents)
 
             # Format chunks with metadata
             formatted_chunks = []

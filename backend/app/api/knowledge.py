@@ -57,32 +57,37 @@ async def process_single_file(
     try:
         # Validate file type
         file_extension = filename.split(".")[-1].lower()
-        if file_extension not in ["pdf", "txt", "csv"]:
+        if file_extension not in ["pdf", "txt", "csv", "docx", "md"]:
             return FileUploadStatus(
                 filename=filename,
                 success=False,
-                error="Unsupported file type. Supported: PDF, TXT, CSV",
+                error="Unsupported file type.",
                 chunk_count=0,
             )
 
-        # Validate file size
-        content = await file.read()
-        file_size = len(content)
-
-        if file_size > settings.MAX_UPLOAD_SIZE:
+        # --- NEW DUPLICATE CHECK ---
+        existing_file = db.query(KnowledgeBase).filter(
+            KnowledgeBase.agent_id == agent_id,
+            KnowledgeBase.filename == filename
+        ).first()
+        if existing_file:
             return FileUploadStatus(
                 filename=filename,
                 success=False,
-                error=f"File too large. Max size: {settings.MAX_UPLOAD_SIZE / 1024 / 1024}MB",
+                error="File already exists in this knowledge base.",
                 chunk_count=0,
             )
 
-        # Save file
+        import shutil
+        # Save file directly from the upload stream (Zero memory spike!)
         os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
         file_path = os.path.join(settings.UPLOAD_DIR, f"{agent_id}_{filename}")
 
         with open(file_path, "wb") as buffer:
-            buffer.write(content)
+            shutil.copyfileobj(file.file, buffer)
+
+        # Get the file size after it is safely on disk
+        file_size = os.path.getsize(file_path)
 
         # Process document
         chunks = await document_processor.process_document(file_path, file_extension)
@@ -117,7 +122,6 @@ async def process_single_file(
         file_path_attempt = os.path.join(settings.UPLOAD_DIR, f"{agent_id}_{filename}")
         if os.path.exists(file_path_attempt):
             os.remove(file_path_attempt)
-        
         return FileUploadStatus(
             filename=filename,
             success=False,
@@ -183,21 +187,26 @@ async def upload_knowledge(
     verify_agent_access(agent_id, current_user.id, db)
 
     file_extension = file.filename.split(".")[-1].lower()
-    if file_extension not in ["pdf", "txt", "csv"]:
+    if file_extension not in ["pdf", "txt", "csv", "docx", "md"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Supported: PDF, TXT, CSV",
+            detail="Unsupported file type.",
+        )
+
+    # --- NEW DUPLICATE CHECK ---
+    existing_file = db.query(KnowledgeBase).filter(
+        KnowledgeBase.agent_id == agent_id,
+        KnowledgeBase.filename == file.filename
+    ).first()
+    if existing_file:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="File already exists in this knowledge base.",
         )
 
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)
-
-    if file_size > settings.MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Max size: {settings.MAX_UPLOAD_SIZE / 1024 / 1024}MB",
-        )
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     file_path = os.path.join(settings.UPLOAD_DIR, f"{agent_id}_{file.filename}")
