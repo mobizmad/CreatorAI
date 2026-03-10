@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime, timedelta
 
 from app.db.database import get_db
-from app.models.models import User, Agent, ChatLog, ConversationSession, AgentAPIKey
+from app.models.models import User, Agent, ChatLog, ConversationSession, AgentAPIKey, KnowledgeBase
 from app.schemas.schemas import (
     AnalyticsOverview,
     AnalyticsTimeSeries,
@@ -102,17 +102,40 @@ async def get_analytics_overview(
         ChatLog.rating == -1
     ).scalar() or 0
     
-    return AnalyticsOverview(
-        total_messages=total_messages,
-        total_sessions=total_sessions,
-        average_rating=round(avg_rating, 2),
-        messages_today=messages_today,
-        messages_week=messages_week,
-        messages_month=messages_month,
-        total_api_usage=total_api_usage,
-        thumbs_up=thumbs_up,
-        thumbs_down=thumbs_down,
-    )
+    import os
+    # 1. Calculate Vector Storage Size (Disk Space Monitor)
+    vector_store_path = "./vector_stores"
+    total_storage_bytes = 0
+    if os.path.exists(vector_store_path):
+        for dirpath, dirnames, filenames in os.walk(vector_store_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                total_storage_bytes += os.path.getsize(fp)
+    storage_mb = round(total_storage_bytes / (1024 * 1024), 2)
+
+    # 2. Estimate OpenAI Costs (Cost Monitor)
+    # Total chunks across the whole agent
+    total_chunks = db.query(func.sum(KnowledgeBase.chunk_count)).filter(
+        KnowledgeBase.agent_id == agent_id
+    ).scalar() or 0
+    # Approx $0.10 per 1 million tokens (text-embedding-3-small)
+    # We assume average chunk is 1000 chars (~250 tokens)
+    estimated_cost = round((total_chunks * 250 / 1000000) * 0.10, 4)
+
+    return {
+        "total_messages": total_messages,
+        "total_sessions": total_sessions,
+        "average_rating": round(avg_rating, 2),
+        "messages_today": messages_today,
+        "messages_week": messages_week,
+        "messages_month": messages_month,
+        "total_api_usage": total_api_usage,
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "storage_used_mb": storage_mb,
+        "estimated_embedding_cost": estimated_cost,
+        "total_chunks": total_chunks
+    }
 
 
 @router.get("/timeseries", response_model=List[AnalyticsTimeSeries])

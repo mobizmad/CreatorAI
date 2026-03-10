@@ -10,6 +10,7 @@ import {
   Users,
   Activity,
   AlertCircle,
+  Database,
 } from 'lucide-react';
 
 interface AnalyticsOverview {
@@ -22,6 +23,9 @@ interface AnalyticsOverview {
   total_api_usage: number;
   thumbs_up: number;
   thumbs_down: number;
+  storage_used_mb: number;
+  estimated_embedding_cost: number;
+  total_chunks: number;
 }
 
 interface TimeSeriesData {
@@ -128,35 +132,58 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
 
   return (
     <div className="space-y-6">
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* System Health & Cost Monitor */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
-          icon={<MessageSquare className="w-5 h-5" />}
+          icon={<MessageSquare className="w-6 h-6" />}
           title="Total Messages"
-          value={overview.total_messages.toLocaleString()}
-          subtitle={`${overview.messages_today} today`}
+          value={<span className="text-3xl font-bold text-gray-900">{overview.total_messages.toLocaleString()}</span>}
+          subtitle={<span className="text-base text-gray-500">{overview.messages_today} today</span>}
           color="blue"
         />
         <StatCard
-          icon={<Users className="w-5 h-5" />}
+          icon={<Users className="w-6 h-6" />}
           title="Conversations"
-          value={overview.total_sessions.toLocaleString()}
-          subtitle={`${overview.messages_week} this week`}
+          value={<span className="text-3xl font-bold text-gray-900">{overview.total_sessions.toLocaleString()}</span>}
+          subtitle={<span className="text-base text-gray-500">{overview.messages_week} this week</span>}
           color="green"
         />
         <StatCard
-          icon={<ThumbsUp className="w-5 h-5" />}
+          icon={<ThumbsUp className="w-6 h-6" />}
           title="Satisfaction"
-          value={`${ratingPercentage}%`}
-          subtitle={`${overview.thumbs_up} 👍 / ${overview.thumbs_down} 👎`}
+          value={<span className="text-3xl font-bold text-gray-900">{ratingPercentage}%</span>}
+          subtitle={<span className="text-base text-gray-500">{overview.thumbs_up} 👍 / {overview.thumbs_down} 👎</span>}
           color={ratingPercentage >= 70 ? 'green' : ratingPercentage >= 50 ? 'yellow' : 'red'}
         />
         <StatCard
-          icon={<Key className="w-5 h-5" />}
+          icon={<Key className="w-6 h-6" />}
           title="API Calls"
-          value={overview.total_api_usage.toLocaleString()}
-          subtitle={`${overview.messages_month} this month`}
+          value={<span className="text-3xl font-bold text-gray-900">{overview.total_api_usage.toLocaleString()}</span>}
+          subtitle={<span className="text-base text-gray-500">{overview.messages_month} this month</span>}
           color="purple"
+        />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <StatCard
+          icon={<Database className="w-6 h-6" />}
+          title="Vector Storage"
+          value={<span className={`text-3xl font-bold ${overview.storage_used_mb > 500 ? 'text-red-600' : 'text-gray-900'}`}>{overview.storage_used_mb} MB</span>}
+          subtitle={<span className="text-base text-gray-500">Disk space used by FAISS</span>}
+          color="yellow"
+        />
+        <StatCard
+          icon={<Activity className="w-6 h-6" />}
+          title="Embedding Chunks"
+          value={<span className="text-3xl font-bold text-gray-900">{overview.total_chunks.toLocaleString()}</span>}
+          subtitle={<span className="text-base text-gray-500">Total segments indexed</span>}
+          color="purple"
+        />
+        <StatCard
+          icon={<TrendingUp className="w-6 h-6" />}
+          title="Estimated Cost"
+          value={<span className="text-3xl font-bold text-gray-900">${overview.estimated_embedding_cost}</span>}
+          subtitle={<span className="text-base text-gray-500">OpenAI Embedding spend</span>}
+          color="green"
         />
       </div>
 

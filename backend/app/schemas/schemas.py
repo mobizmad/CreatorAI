@@ -247,6 +247,9 @@ class AnalyticsOverview(BaseModel):
     total_api_usage: int
     thumbs_up: int
     thumbs_down: int
+    storage_used_mb: float
+    estimated_embedding_cost: float
+    total_chunks: int
 
 
 class AnalyticsTimeSeries(BaseModel):

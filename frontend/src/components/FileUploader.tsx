@@ -323,7 +323,7 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  // Removed isDraggingOver state to disable overlay
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showNewFolder, setShowNewFolder] = useState(false);
@@ -600,6 +600,7 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
     } finally { setIsUploading(false); }
   };
 
+
   // ── Navigation ─────────────────────────────────────────────────────────────
 
   const breadcrumb: KBFolder[] = [];
@@ -615,6 +616,28 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
     const cur = folders.find(f => f.id === currentFolderId);
     setCurrentFolderId(cur?.parentId ?? null);
     setSearchQuery('');
+  };
+
+  // ── Move file(s) to root ─────────────────────────────────────────────────--
+  const moveToRoot = async (fileIds: string[]) => {
+    // Optimistic UI update
+    setFiles(prev => prev.map(f => fileIds.includes(f.id) ? { ...f, folderId: null } : f));
+    // Backend sync
+    for (const fileId of fileIds) {
+      if (fileId.startsWith('local-')) continue; // Don't sync pending files
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/knowledge/${fileId}/move`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ folder_id: null })
+        });
+      } catch (err) {
+        console.error('Failed to move file to root', err);
+      }
+    }
   };
 
   // ── Filtered & sorted items ────────────────────────────────────────────────
@@ -679,11 +702,22 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
         <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: '#f3f4f6', background: '#fafafa' }}>
           {/* Breadcrumb */}
           <div className="flex items-center gap-1 mr-2 flex-1 min-w-0">
-            <button onClick={() => { setCurrentFolderId(null); setSearchQuery(''); }}
-              className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors flex-shrink-0">
+            {/* Home breadcrumb as drop target */}
+            <div
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); (e.currentTarget as HTMLElement).style.background = '#e6f4ff'; }}
+              onDragLeave={e => { e.preventDefault(); e.stopPropagation(); (e.currentTarget as HTMLElement).style.background = ''; }}
+              onDrop={e => {
+                e.preventDefault(); e.stopPropagation(); (e.currentTarget as HTMLElement).style.background = '';
+                const ids = e.dataTransfer.getData('fileIds');
+                if (ids) moveToRoot(JSON.parse(ids));
+                setCurrentFolderId(null); setSearchQuery('');
+              }}
+              style={{ borderRadius: 8, transition: 'background 0.2s' }}
+              className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-500 transition-colors flex-shrink-0 cursor-pointer px-1"
+            >
               <Home className="w-3.5 h-3.5" />
               <span className="font-medium">Root</span>
-            </button>
+            </div>
             {breadcrumb.map((f, i) => (
               <span key={f.id} className="flex items-center gap-1 min-w-0">
                 <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
@@ -750,12 +784,13 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
         </div>
 
         {/* ── Drop zone wrapper ── */}
+
         <div
           className="relative"
-          onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
-          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingOver(false); }}
+          onDragOver={e => { e.preventDefault(); }}
+          onDragLeave={e => { e.preventDefault(); }}
           onDrop={e => {
-            e.preventDefault(); setIsDraggingOver(false);
+            e.preventDefault();
             // Check if it's external files (from OS)
             if (e.dataTransfer.files.length > 0) { stageFiles(Array.from(e.dataTransfer.files)); return; }
             // Check if it's internal file cards being dragged to root
@@ -763,17 +798,6 @@ export default function KnowledgeBase({ agentId, onUploadSuccess }: FileUploader
             if (ids) setFiles(prev => prev.map(f => JSON.parse(ids).includes(f.id) ? { ...f, folderId: currentFolderId } : f));
           }}
           style={{ minHeight: 320 }}>
-
-          {isDraggingOver && (
-            <div className="absolute inset-0 z-10 pointer-events-none rounded-b-2xl flex items-center justify-center"
-              style={{ background: 'rgba(22,119,255,0.04)', border: '2px dashed #1677ff', margin: 8, borderRadius: 12 }}>
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="w-8 h-8 text-blue-400" />
-                <p className="text-sm font-semibold text-blue-500">Drop files here</p>
-                <p className="text-xs text-blue-400">or drag onto a folder to move</p>
-              </div>
-            </div>
-          )}
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
