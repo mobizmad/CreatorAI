@@ -30,9 +30,12 @@ wheels/
 
 # Backend
 backend/uploads/
+backend/vector_stores/
 backend/.pytest_cache/
 backend/.coverage
 backend/htmlcov/
+backend/test_ddg.py
+test_search.py
 
 # Node.js / Frontend
 node_modules/

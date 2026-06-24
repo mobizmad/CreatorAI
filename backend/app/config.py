@@ -18,6 +18,12 @@ class Settings(BaseSettings):
 
     # OpenAI (Required for embeddings and GPT models)
     OPENAI_API_KEY: Optional[str] = None
+    FAL_KEY: Optional[str] = None
+    LOCAL_IMAGE_MODEL_ID: str = "stabilityai/stable-diffusion-3.5-medium"
+    LOCAL_IMAGE_SERVICE_URL: str = "http://localhost:8002"
+    LOCAL_IMAGE_SERVICE_TIMEOUT: float = 600.0
+    LOCAL_IMAGE_DEVICE: str = "auto"
+    LOCAL_IMAGE_TORCH_DTYPE: str = "auto"
 
     # Ollama (Optional - for local LLM)
     OLLAMA_ENDPOINT: str = "http://localhost:11434"
@@ -25,6 +31,7 @@ class Settings(BaseSettings):
     # File Upload
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
+    PUBLIC_API_BASE_URL: str = "http://localhost:8001"
 
     # CORS - stored as comma-separated string, parsed when used
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"

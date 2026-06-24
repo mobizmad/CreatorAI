@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, Trash2, Edit, MessageSquare, Loader2 } from 'lucide-react';
+import { Bot, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 import type { Agent } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
@@ -31,9 +31,9 @@ export default function AgentCard({ agent, onDelete }: AgentCardProps) {
   const getLLMBadgeColor = (provider: string) => {
     switch (provider) {
       case 'openai':
-        return 'bg-green-100 text-green-800';
+        return 'bg-blue-100 text-blue-800';
       case 'ollama':
-        return 'bg-purple-100 text-purple-800';
+        return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -56,7 +56,7 @@ export default function AgentCard({ agent, onDelete }: AgentCardProps) {
                 agent.llm_provider
               )}`}
             >
-              {agent.llm_provider === 'openai' ? 'OpenAI' : 'Ollama'} •{' '}
+              {agent.llm_provider === 'openai' ? 'OpenAI' : 'Free'} •{' '}
               {agent.llm_model}
             </span>
 
@@ -93,7 +93,7 @@ export default function AgentCard({ agent, onDelete }: AgentCardProps) {
       {/* Metadata */}
       <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
         <span>Created {new Date(agent.created_at).toLocaleDateString()}</span>
-        <span>Temperature: {agent.temperature}</span>
+        <span>Creativity: {agent.temperature}</span>
       </div>
 
       {/* Chat button */}

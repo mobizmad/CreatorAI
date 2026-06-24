@@ -11,6 +11,7 @@ import {
   Activity,
   AlertCircle,
   Database,
+  Lightbulb,
 } from 'lucide-react';
 
 interface AnalyticsOverview {
@@ -47,6 +48,31 @@ interface APIKeyUsage {
   is_active: boolean;
 }
 
+interface ImprovementSourceMessage {
+  id: string;
+  user_message: string;
+  agent_response: string;
+  rating: number;
+  created_at: string;
+}
+
+interface ImprovementSuggestion {
+  id: string;
+  category: string;
+  priority: 'high' | 'medium' | 'low' | string;
+  title: string;
+  detail: string;
+  action: string;
+  evidence?: string | null;
+  source_messages: ImprovementSourceMessage[];
+}
+
+interface AgentImprovementResponse {
+  score: number;
+  summary: string;
+  suggestions: ImprovementSuggestion[];
+}
+
 interface AnalyticsDashboardProps {
   agentId: string;
 }
@@ -56,6 +82,7 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
   const [timeSeries, setTimeSeries] = useState<TimeSeriesData[]>([]);
   const [topQuestions, setTopQuestions] = useState<TopQuestion[]>([]);
   const [apiUsage, setApiUsage] = useState<APIKeyUsage[]>([]);
+  const [improvements, setImprovements] = useState<AgentImprovementResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,7 +98,7 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [overviewRes, timeSeriesRes, questionsRes, apiRes] = await Promise.all([
+      const [overviewRes, timeSeriesRes, questionsRes, apiRes, improvementsRes] = await Promise.all([
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/analytics/overview`, {
           headers,
         }),
@@ -85,21 +112,26 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/analytics/api-usage`, {
           headers,
         }),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/analytics/improvements`, {
+          headers,
+        }),
       ]);
 
       if (!overviewRes.ok) throw new Error('Failed to fetch analytics');
 
-      const [overviewData, timeSeriesData, questionsData, apiData] = await Promise.all([
+      const [overviewData, timeSeriesData, questionsData, apiData, improvementsData] = await Promise.all([
         overviewRes.json(),
         timeSeriesRes.json(),
         questionsRes.json(),
         apiRes.json(),
+        improvementsRes.json(),
       ]);
 
       setOverview(overviewData);
       setTimeSeries(timeSeriesData.reverse()); // Oldest to newest for chart
       setTopQuestions(questionsData);
       setApiUsage(apiData);
+      setImprovements(improvementsData);
     } catch (err) {
       setError('Failed to load analytics');
       console.error(err);
@@ -186,6 +218,8 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
           color="green"
         />
       </div>
+
+      {improvements && <ImprovementAssistant improvements={improvements} />}
 
       {/* Time Series Chart */}
       <div className="bg-white rounded-lg shadow p-6">
@@ -290,11 +324,89 @@ export default function AnalyticsDashboard({ agentId }: AnalyticsDashboardProps)
   );
 }
 
+function ImprovementAssistant({ improvements }: { improvements: AgentImprovementResponse }) {
+  const scoreColor =
+    improvements.score >= 80
+      ? 'text-green-600'
+      : improvements.score >= 60
+      ? 'text-yellow-600'
+      : 'text-red-600';
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <Lightbulb className="h-5 w-5 text-primary-500" />
+            Agent Improvement Assistant
+          </h3>
+          <p className="mt-1 text-sm text-gray-600">{improvements.summary}</p>
+        </div>
+        <div className="rounded-lg border border-gray-200 px-4 py-3 text-center">
+          <div className={`text-3xl font-bold ${scoreColor}`}>{improvements.score}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Readiness Score</div>
+        </div>
+      </div>
+
+      {improvements.suggestions.length === 0 ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          No urgent improvement items found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {improvements.suggestions.map((suggestion) => (
+            <ImprovementItem key={suggestion.id} suggestion={suggestion} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImprovementItem({ suggestion }: { suggestion: ImprovementSuggestion }) {
+  const priorityClasses = {
+    high: 'bg-red-100 text-red-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    low: 'bg-blue-100 text-blue-700',
+  };
+  const badgeClass =
+    priorityClasses[suggestion.priority as keyof typeof priorityClasses] || 'bg-gray-100 text-gray-700';
+
+  return (
+    <div className="rounded-lg border border-gray-200 p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-1 text-xs font-semibold capitalize ${badgeClass}`}>
+          {suggestion.priority}
+        </span>
+        <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
+          {suggestion.category}
+        </span>
+      </div>
+      <h4 className="text-sm font-semibold text-gray-900">{suggestion.title}</h4>
+      <p className="mt-1 text-sm leading-6 text-gray-600">{suggestion.detail}</p>
+      <p className="mt-2 text-sm font-medium text-gray-800">{suggestion.action}</p>
+      {suggestion.evidence && (
+        <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">{suggestion.evidence}</p>
+      )}
+      {suggestion.source_messages.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {suggestion.source_messages.slice(0, 2).map((message) => (
+            <div key={message.id} className="rounded-lg bg-red-50 px-3 py-2">
+              <p className="text-xs font-semibold text-red-700">Low-rated question</p>
+              <p className="mt-1 truncate text-sm text-gray-800">{message.user_message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface StatCardProps {
   icon: React.ReactNode;
   title: string;
-  value: string;
-  subtitle: string;
+  value: React.ReactNode;
+  subtitle: React.ReactNode;
   color: 'blue' | 'green' | 'purple' | 'red' | 'yellow';
 }
 

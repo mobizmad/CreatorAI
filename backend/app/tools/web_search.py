@@ -96,8 +96,8 @@ class WebSearchTool:
         results = []
         
         try:
-            search_results = ddgs.text(query, max_results=max_results)
-            
+            # Fetch general web results using lite backend to avoid rate limits
+            search_results = ddgs.text(query, max_results=max_results, backend="lite")
             for result in search_results:
                 results.append({
                     "title": result.get("title", ""),
@@ -105,6 +105,17 @@ class WebSearchTool:
                     "snippet": result.get("body", ""),
                     "published_date": None,
                     "score": 0.5,
+                })
+                
+            # Fetch news results to get actual recent events (crucial for "latest news" queries)
+            news_results = ddgs.news(query, max_results=2)
+            for news in news_results:
+                results.append({
+                    "title": f"[NEWS] {news.get('title', '')}",
+                    "url": news.get("url", ""),
+                    "snippet": news.get("body", ""),
+                    "published_date": news.get("date", ""),
+                    "score": 0.8,
                 })
         except Exception as e:
             print(f"DuckDuckGo search error: {e}")
@@ -114,7 +125,7 @@ class WebSearchTool:
     def format_results_for_llm(self, results: List[Dict]) -> str:
         """Format search results into a prompt-friendly string"""
         if not results:
-            return "No search results found."
+            return "SEARCH FAILED: The search engine failed to return results. Please tell the user exactly: 'I tried to search the web for real-time information, but the search engine failed to return any results.'"
         
         formatted = "Search Results:\n\n"
         

@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: agentbuilder
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,15 +28,22 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentbuilder
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OLLAMA_ENDPOINT: ${OLLAMA_ENDPOINT:-http://host.docker.internal:11434}
+      FAL_KEY: ${FAL_KEY}
+      OLLAMA_ENDPOINT: http://host.docker.internal:11434
+      LOCAL_IMAGE_MODEL_ID: ${LOCAL_IMAGE_MODEL_ID:-stabilityai/stable-diffusion-3.5-medium}
+      LOCAL_IMAGE_SERVICE_URL: ${LOCAL_IMAGE_SERVICE_URL:-http://host.docker.internal:8002}
+      LOCAL_IMAGE_DEVICE: ${LOCAL_IMAGE_DEVICE:-auto}
+      LOCAL_IMAGE_TORCH_DTYPE: ${LOCAL_IMAGE_TORCH_DTYPE:-auto}
+      HF_HOME: /app/.cache/huggingface
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
-      # UPDATED: Added your public frontend URL to the allowed origins
+      PUBLIC_API_BASE_URL: "http://localhost:8001"
       CORS_ORIGINS: "https://aicreate.ibechamp.com,http://localhost:3001"
     ports:
       - "8001:8001"
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/vector_stores:/app/vector_stores
+      - huggingface_cache:/app/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,8 +56,7 @@ services:
       dockerfile: Dockerfile
     container_name: agentbuilder-frontend
     environment:
-      # UPDATED: Frontend now talks to the public Cloudflare backend URL
-      NEXT_PUBLIC_API_URL: "https://aicreateback.ibechamp.com"
+      NEXT_PUBLIC_API_URL: "http://localhost:8001"
     ports:
       - "3001:3001"
     depends_on:
@@ -59,3 +65,4 @@ services:
 
 volumes:
   postgres_data:
+  huggingface_cache:

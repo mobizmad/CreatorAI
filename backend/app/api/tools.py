@@ -1,4 +1,7 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
@@ -8,8 +11,10 @@ from app.models.models import User, Agent, AgentTool
 from app.schemas.schemas import ToolCreate, ToolResponse, ToolTest
 from app.api.auth import get_current_user
 from app.tools.custom_api import CustomAPITool, APIToolConfig
+from app.tools.builtin_agent_tools import BUILTIN_TOOL_DEFINITIONS, GENERATED_TOOL_DIR, image_generation_models
 
 router = APIRouter(prefix="/agents/{agent_id}/tools", tags=["Tools"])
+files_router = APIRouter(prefix="/agent-tools", tags=["Tools"])
 
 
 def verify_agent_access(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
@@ -31,8 +36,12 @@ async def create_tool(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new custom API tool"""
+    """Create a new tool"""
     verify_agent_access(agent_id, current_user.id, db)
+    if tool.tool_type in BUILTIN_TOOL_DEFINITIONS:
+        definition = BUILTIN_TOOL_DEFINITIONS[tool.tool_type]
+        tool.name = tool.name or definition["name"]
+        tool.description = tool.description or definition["description"]
     
     # Check for duplicate name
     existing = db.query(AgentTool).filter(
@@ -62,6 +71,24 @@ async def create_tool(
     db.refresh(agent_tool)
     
     return agent_tool
+
+
+@router.get("/available")
+async def list_available_tools(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List built-in tool types that can be enabled for an agent."""
+    verify_agent_access(agent_id, current_user.id, db)
+    return [
+        {
+            "tool_type": tool_type,
+            **definition,
+            **({"models": image_generation_models()} if tool_type == "ai_image_generation" else {}),
+        }
+        for tool_type, definition in BUILTIN_TOOL_DEFINITIONS.items()
+    ]
 
 
 @router.get("", response_model=List[ToolResponse])
@@ -168,3 +195,12 @@ async def toggle_tool(
     db.refresh(tool)
     
     return tool
+
+
+@files_router.get("/files/{filename}", name="get_agent_tool_file")
+async def get_agent_tool_file(filename: str):
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(GENERATED_TOOL_DIR, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Generated file not found")
+    return FileResponse(file_path, media_type="application/pdf", filename=safe_filename)

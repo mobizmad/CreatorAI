@@ -15,6 +15,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
+    token_balance = Column(Integer, default=100000, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agents = relationship("Agent", back_populates="user", cascade="all, delete-orphan")
@@ -56,6 +57,7 @@ class Agent(Base):
     chat_logs = relationship("ChatLog", back_populates="agent", cascade="all, delete-orphan")
     sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")
     tools = relationship("AgentTool", back_populates="agent", cascade="all, delete-orphan") # NEW
+    integrations = relationship("AgentIntegration", back_populates="agent", cascade="all, delete-orphan")
 
 
 # ─────────────────────────────────────────
@@ -85,6 +87,33 @@ class AgentTool(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agent = relationship("Agent", back_populates="tools")
+
+
+class AgentIntegration(Base):
+    """External channel credentials connected to one agent."""
+    __tablename__ = "agent_integrations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)  # facebook, line, telegram
+    display_name = Column(String, nullable=True)
+    channel_id = Column(String, nullable=True)
+    page_id = Column(String, nullable=True)
+    bot_username = Column(String, nullable=True)
+    app_id = Column(String, nullable=True)
+    app_secret = Column(Text, nullable=True)
+    channel_secret = Column(Text, nullable=True)
+    access_token = Column(Text, nullable=True)
+    bot_token = Column(Text, nullable=True)
+    verify_token = Column(Text, nullable=True)
+    webhook_url = Column(Text, nullable=True)
+    required_scopes = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    agent = relationship("Agent", back_populates="integrations")
 
 
 class AgentTemplate(Base):
@@ -231,3 +260,54 @@ class MarketplaceReview(Base):
 
     agent = relationship("Agent", backref="marketplace_reviews")
     reviewer = relationship("User", backref="reviews_given")
+
+
+class AIStudioGeneration(Base):
+    """Generated media from AI Studio. Private by default, publishable as templates."""
+    __tablename__ = "ai_studio_generations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    model_id = Column(String, nullable=False)
+    generation_type = Column(String, nullable=False)  # image, video, speech
+    prompt = Column(Text, nullable=False)
+    quality = Column(String, nullable=True)
+    source_image_url = Column(Text, nullable=True)
+    media = Column(JSON, default=list)
+    result = Column(JSON, default=dict)
+    request_id = Column(String, nullable=True)
+    visibility = Column(String, default="private")  # private, public
+    created_at = Column(DateTime, default=datetime.utcnow)
+    published_at = Column(DateTime, nullable=True)
+
+    creator = relationship("User", backref="ai_studio_generations")
+    likes = relationship("AIStudioLike", back_populates="generation", cascade="all, delete-orphan")
+
+
+class AIStudioLike(Base):
+    """Likes for published AI Studio templates."""
+    __tablename__ = "ai_studio_likes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    generation_id = Column(UUID(as_uuid=True), ForeignKey("ai_studio_generations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    generation = relationship("AIStudioGeneration", back_populates="likes")
+    user = relationship("User", backref="ai_studio_likes")
+
+
+class MediaEditorProject(Base):
+    """Persistent Media Editor projects, scoped to the owning user."""
+    __tablename__ = "media_editor_projects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    assets = Column(JSON, default=list)
+    tracks = Column(JSON, default=list)
+    playhead = Column(Float, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", backref="media_editor_projects")

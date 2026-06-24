@@ -23,7 +23,7 @@ export default function WidgetPage() {
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://aicreateback.ibechamp.com";
 
   // Load agent config (name, description only — no secrets)
   useEffect(() => {

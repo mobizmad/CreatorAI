@@ -6,9 +6,11 @@ from uuid import UUID
 from datetime import datetime
 import json
 import asyncio
+import httpx
 
 from app.db.database import get_db
 from app.models.models import User, Agent, ChatLog, ConversationSession
+from app.config import settings
 from app.schemas.schemas import (
     ChatMessage,
     ChatResponse,
@@ -20,13 +22,60 @@ from app.schemas.schemas import (
 from app.api.auth import get_current_user
 from app.core.agent_graph import AgentExecutor
 from app.services.vector_store import VectorStoreService
+from app.tools.builtin_agent_tools import (
+    get_active_builtin_tool_types,
+    wants_image_generation,
+    wants_pdf_generation,
+)
 
 # ─────────────────────────────────────────
 # NEW: Import Multi-Agent Executor
 # ─────────────────────────────────────────
+from app.services.token_service import TokenManager
 from app.core.multi_agent_graph import MultiAgentExecutor
 
 router = APIRouter(prefix="/agents/{agent_id}/chat", tags=["Chat"])
+
+DEFAULT_OLLAMA_AGENT_MODEL = "gemma4:latest"
+OPENAI_ONLY_MODELS = {"gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"}
+
+
+def repair_agent_llm_config(agent: Agent, db: Session) -> None:
+    if agent.llm_provider == "ollama" and (
+        not agent.llm_model or agent.llm_model in OPENAI_ONLY_MODELS or agent.llm_model.startswith("gpt-")
+    ):
+        agent.llm_model = DEFAULT_OLLAMA_AGENT_MODEL
+        db.add(agent)
+        db.commit()
+        db.refresh(agent)
+
+
+def friendly_chat_error(error: Exception | str) -> str:
+    text = str(error)
+    lowered = text.lower()
+    if "ollama" in lowered and ("404" in lowered or "not found" in lowered):
+        return "This agent was using a model that is not available. I switched it to gemma4. Please try again."
+    if "host.docker.internal" in lowered or "connection" in lowered or "connect" in lowered:
+        return "Ollama is not reachable. Please make sure Ollama is running, then try again."
+    if "api key" in lowered:
+        return "The API key for this model is missing or not valid."
+    return "Something went wrong while answering. Please try again."
+
+
+async def check_ollama_health(model_name: str) -> tuple[bool, bool]:
+    endpoint = (settings.OLLAMA_ENDPOINT or "http://localhost:11434").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(f"{endpoint}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+            models = {item.get("name") for item in data.get("models", [])}
+            model_ok = model_name in models
+            if not model_ok and ":" not in model_name:
+                model_ok = f"{model_name}:latest" in models
+            return True, model_ok
+    except Exception:
+        return False, False
 
 
 def verify_agent_access(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
@@ -125,6 +174,47 @@ async def delete_session(
     return None
 
 
+@router.get("/health")
+async def agent_chat_health(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = verify_agent_access(agent_id, current_user.id, db)
+    repair_agent_llm_config(agent, db)
+
+    ollama_connected: bool | None = None
+    model_ok = True
+    if agent.llm_provider == "ollama":
+        ollama_connected, model_ok = await check_ollama_health(agent.llm_model)
+    elif agent.llm_provider == "openai":
+        model_ok = bool(settings.OPENAI_API_KEY or agent.api_key)
+
+    knowledge_count = len(agent.knowledge_bases or [])
+    knowledge_files_ready = True
+    if knowledge_count:
+        knowledge_files_ready = all(getattr(kb, "processed", True) for kb in agent.knowledge_bases)
+
+    if agent.llm_provider == "ollama" and not ollama_connected:
+        message = "Ollama is not reachable. Please make sure Ollama is running."
+    elif not model_ok:
+        message = "This agent model is not available. I switched bad GPT model names to gemma4."
+    elif knowledge_count:
+        message = f"{knowledge_count} knowledge file(s) ready."
+    else:
+        message = "Ready to chat."
+
+    return {
+        "model_ok": model_ok,
+        "ollama_connected": ollama_connected,
+        "knowledge_files_ready": knowledge_files_ready,
+        "knowledge_file_count": knowledge_count,
+        "provider": agent.llm_provider,
+        "model": agent.llm_model,
+        "message": message,
+    }
+
+
 # ─────────────────────────────────────────
 # Chat Endpoint with Multi-Agent Support
 # ─────────────────────────────────────────
@@ -134,7 +224,9 @@ async def stream_response(
     message: str,
     agent_id: UUID,
     session_id: UUID,
-    db: Session
+    db: Session,
+    user: User,
+    minimum_cost: int
 ) -> AsyncGenerator[str, None]:
     """
     Stream agent response token by token
@@ -156,13 +248,9 @@ async def stream_response(
             elif chunk["type"] == "sources":
                 sources = chunk["content"]
         
-        # Send final sources
-        yield f"data: {json.dumps({'token': '', 'sources': sources})}\n\n"
-        
-        # Send done signal
-        yield "data: [DONE]\n\n"
-        
-        # Save to database after streaming completes
+        message_id = None
+
+        # Save to database after streaming completes, before the final client event
         session = db.query(ConversationSession).filter(
             ConversationSession.id == session_id
         ).first()
@@ -186,9 +274,21 @@ async def stream_response(
                 session.title = title + "..." if len(message) > 60 else title
             
             db.commit()
+            db.refresh(chat_log)
+            message_id = str(chat_log.id)
             
+        TokenManager.deduct_tokens(user, db, TokenManager.llm_cost(executor.agent.llm_provider, message, full_response))
+
+        # Send final sources and session metadata
+        yield f"data: {json.dumps({'token': '', 'sources': sources, 'session_id': str(session_id), 'message_id': message_id})}\n\n"
+
+        # Send done signal
+        yield "data: [DONE]\n\n"
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield f"data: {json.dumps({'error': friendly_chat_error(e)})}\n\n"
         yield "data: [DONE]\n\n"
 
 
@@ -206,6 +306,7 @@ async def chat_with_agent(
     NEW: Automatically enables Web Search if enabled
     """
     agent = verify_agent_access(agent_id, current_user.id, db)
+    repair_agent_llm_config(agent, db)
 
     # Resolve session
     session_id = message.session_id
@@ -229,13 +330,35 @@ async def chat_with_agent(
         db.refresh(session)
         session_id = session.id
 
+    minimum_cost = TokenManager.llm_cost(agent.llm_provider, message.message)
+    TokenManager.check_balance(current_user, minimum_cost)
+
     try:
         vector_store = VectorStoreService()
         
         # ─────────────────────────────────────────
         # NEW: Choose executor based on agent settings
         # ─────────────────────────────────────────
-        if agent.multi_agent_enabled:
+        active_builtin_tools = get_active_builtin_tool_types(db, str(agent_id))
+        recent_history = []
+        if session_id:
+            recent_logs = (
+                db.query(ChatLog)
+                .filter(ChatLog.session_id == session_id)
+                .order_by(ChatLog.created_at.desc())
+                .limit(4)
+                .all()
+            )
+            for log in reversed(recent_logs):
+                recent_history.append({"role": "user", "content": log.user_message})
+                recent_history.append({"role": "assistant", "content": log.agent_response})
+
+        should_use_builtin_tool = (
+            ("ai_image_generation" in active_builtin_tools and wants_image_generation(message.message, recent_history))
+            or ("pdf_generator" in active_builtin_tools and wants_pdf_generation(message.message))
+        )
+
+        if agent.multi_agent_enabled and not should_use_builtin_tool:
             # Use Multi-Agent Workforce
             print(f"✅ Using Multi-Agent Mode for agent {agent_id}")
             executor = MultiAgentExecutor(
@@ -259,7 +382,7 @@ async def chat_with_agent(
         # ─────────────────────────────────────────
         if getattr(message, "stream", False):
             return StreamingResponse(
-                stream_response(executor, message.message, agent_id, session_id, db),
+                stream_response(executor, message.message, agent_id, session_id, db, current_user, minimum_cost),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
@@ -291,6 +414,8 @@ async def chat_with_agent(
         db.commit()
         db.refresh(chat_log)
 
+        TokenManager.deduct_tokens(current_user, db, TokenManager.llm_cost(agent.llm_provider, message.message, result["response"]))
+
         return ChatResponse(
             response=result["response"],
             sources=result.get("sources", []),
@@ -302,7 +427,7 @@ async def chat_with_agent(
         print(f"❌ Chat error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing chat: {str(e)}",
+            detail=friendly_chat_error(e),
         )
 
 

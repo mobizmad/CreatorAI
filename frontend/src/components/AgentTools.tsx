@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Power, X, Globe, Settings } from 'lucide-react';
+import { FileText, Image as ImageIcon, Plus, Trash2, Power, X, Globe, Settings } from 'lucide-react';
 
 interface Tool {
   id: string;
@@ -10,7 +10,15 @@ interface Tool {
   tool_type: string;
   api_url: string;
   method: string;
+  request_body_template?: Record<string, string>;
   is_active: boolean;
+}
+
+interface StudioModel {
+  id: string;
+  label: string;
+  type: 'image' | 'video' | 'speech';
+  requires_image: boolean;
 }
 
 interface AgentToolsProps {
@@ -19,6 +27,8 @@ interface AgentToolsProps {
 
 export default function AgentTools({ agentId }: AgentToolsProps) {
   const [tools, setTools] = useState<Tool[]>([]);
+  const [imageModels, setImageModels] = useState<StudioModel[]>([]);
+  const [selectedImageModel, setSelectedImageModel] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -28,9 +38,43 @@ export default function AgentTools({ agentId }: AgentToolsProps) {
   const [apiUrl, setApiUrl] = useState('');
   const [method, setMethod] = useState('GET');
 
+  const builtInTools = [
+    {
+      tool_type: 'ai_image_generation',
+      name: 'AI Image Generator',
+      description: 'Generate images from chat requests using AI Studio.',
+      icon: ImageIcon,
+    },
+    {
+      tool_type: 'pdf_generator',
+      name: 'PDF Generator',
+      description: 'Create downloadable PDF files from chat responses.',
+      icon: FileText,
+    },
+  ];
+
   useEffect(() => {
     fetchTools();
+    fetchAvailableTools();
   }, [agentId]);
+
+  const fetchAvailableTools = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/tools/available`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const imageTool = data.find((tool: any) => tool.tool_type === 'ai_image_generation');
+      const models = imageTool?.models || [];
+      setImageModels(models);
+      if (models[0]) setSelectedImageModel((current) => current || models[0].id);
+    } catch (err) {
+      console.error('Failed to fetch available tools:', err);
+    }
+  };
 
   const fetchTools = async () => {
     try {
@@ -83,6 +127,32 @@ export default function AgentTools({ agentId }: AgentToolsProps) {
     }
   };
 
+  const addBuiltInTool = async (toolType: string) => {
+    const definition = builtInTools.find((tool) => tool.tool_type === toolType);
+    if (!definition) return;
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/tools`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          name: definition.name,
+          description: definition.description,
+          tool_type: definition.tool_type,
+          request_body_template: toolType === 'ai_image_generation' ? { model_id: selectedImageModel || imageModels[0]?.id } : undefined,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to add tool');
+      fetchTools();
+    } catch (err) {
+      alert('Failed to add tool');
+    }
+  };
+
   const toggleTool = async (toolId: string) => {
     try {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agents/${agentId}/tools/${toolId}/toggle`, {
@@ -114,9 +184,9 @@ export default function AgentTools({ agentId }: AgentToolsProps) {
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <Settings className="w-5 h-5 text-primary-500" />
-            Custom API Tools
+            Agent Tools
           </h2>
-          <p className="text-sm text-gray-600 mt-1">Connect your agent to external APIs (Shopify, Jira, etc.)</p>
+          <p className="text-sm text-gray-600 mt-1">Enable built-in tools or connect your agent to external APIs.</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
@@ -125,6 +195,55 @@ export default function AgentTools({ agentId }: AgentToolsProps) {
           <Plus className="w-4 h-4" />
           Add Tool
         </button>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+        {builtInTools.map(({ tool_type, name, description, icon: Icon }) => {
+          const existing = tools.find((tool) => tool.tool_type === tool_type);
+          return (
+            <div key={tool_type} className="rounded-lg border border-gray-200 p-4">
+              <div className="mb-3 flex items-start gap-3">
+                <Icon className="mt-0.5 h-5 w-5 text-primary-500" />
+                <div>
+                  <h3 className="font-semibold text-gray-900">{name}</h3>
+                  <p className="mt-1 text-sm text-gray-600">{description}</p>
+                </div>
+              </div>
+              {tool_type === 'ai_image_generation' && !existing && (
+                <select
+                  value={selectedImageModel}
+                  onChange={(event) => setSelectedImageModel(event.target.value)}
+                  className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {imageModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {existing ? (
+                <button
+                  onClick={() => toggleTool(existing.id)}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                    existing.is_active
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {existing.is_active ? 'Enabled' : 'Disabled'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => addBuiltInTool(tool_type)}
+                  className="rounded-lg bg-primary-500 px-3 py-2 text-sm font-medium text-white hover:bg-primary-600"
+                >
+                  Enable
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {isLoading ? (
@@ -148,7 +267,16 @@ export default function AgentTools({ agentId }: AgentToolsProps) {
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 mb-2">{tool.description}</p>
-                  <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">{tool.method} {tool.api_url}</code>
+                  {tool.tool_type === 'custom_api' ? (
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">{tool.method} {tool.api_url}</code>
+                  ) : (
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">
+                      {tool.tool_type}
+                      {tool.tool_type === 'ai_image_generation' && tool.request_body_template?.model_id
+                        ? ` / ${tool.request_body_template.model_id}`
+                        : ''}
+                    </code>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleTool(tool.id)} className="p-2 text-gray-500 hover:text-primary-600 rounded-lg hover:bg-white transition-colors" title="Toggle Status">

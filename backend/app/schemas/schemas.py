@@ -18,6 +18,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     email: str
+    token_balance: int = 100000
     created_at: datetime
 
     class Config:
@@ -36,10 +37,12 @@ class AgentCreate(BaseModel):
     system_prompt: Optional[str] = None
     output_template: Optional[str] = None  # Added for templates
     llm_provider: str = "openai"
-    llm_model: str = "gpt-4"
+    llm_model: str = "gpt-4o-mini"
     ollama_endpoint: Optional[str] = None
     api_key: Optional[str] = None
     temperature: float = 0.7
+    enabled_tools: Optional[List[str]] = []
+    tool_settings: Optional[Dict[str, Dict[str, Any]]] = {}
 
 
 class AgentUpdate(BaseModel):
@@ -270,6 +273,72 @@ class APIKeyUsage(BaseModel):
     last_used_at: Optional[datetime]
     is_active: bool
 
+
+class ImprovementSourceMessage(BaseModel):
+    id: UUID
+    user_message: str
+    agent_response: str
+    rating: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AgentIntegrationUpsert(BaseModel):
+    display_name: Optional[str] = None
+    channel_id: Optional[str] = None
+    page_id: Optional[str] = None
+    bot_username: Optional[str] = None
+    app_id: Optional[str] = None
+    app_secret: Optional[str] = None
+    channel_secret: Optional[str] = None
+    access_token: Optional[str] = None
+    bot_token: Optional[str] = None
+    verify_token: Optional[str] = None
+    required_scopes: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: bool = False
+
+
+class AgentIntegrationResponse(BaseModel):
+    id: UUID
+    agent_id: UUID
+    provider: str
+    display_name: Optional[str]
+    channel_id: Optional[str]
+    page_id: Optional[str]
+    bot_username: Optional[str]
+    app_id: Optional[str]
+    has_app_secret: bool
+    has_channel_secret: bool
+    has_access_token: bool
+    has_bot_token: bool
+    has_verify_token: bool
+    webhook_url: Optional[str]
+    required_scopes: Optional[str]
+    notes: Optional[str]
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+
+class ImprovementSuggestion(BaseModel):
+    id: str
+    category: str
+    priority: str
+    title: str
+    detail: str
+    action: str
+    evidence: Optional[str] = None
+    source_messages: List[ImprovementSourceMessage] = []
+
+
+class AgentImprovementResponse(BaseModel):
+    score: int
+    summary: str
+    suggestions: List[ImprovementSuggestion]
+
 # Bulk Upload Schemas
 class FileUploadStatus(BaseModel):
     """Status of a single file in bulk upload"""
@@ -331,6 +400,8 @@ class AgentFromTemplateRequest(BaseModel):
     output_template: Optional[str] = None  
     llm_provider: Optional[str] = None  
     llm_model: Optional[str] = None  
+    enabled_tools: Optional[List[str]] = []
+    tool_settings: Optional[Dict[str, Dict[str, Any]]] = {}
 
 
 
@@ -355,6 +426,7 @@ class ToolResponse(BaseModel):
     tool_type: str
     api_url: Optional[str]
     method: Optional[str]
+    request_body_template: Optional[Dict] = None
     is_active: bool
     created_at: datetime
     

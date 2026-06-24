@@ -4,7 +4,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.db.database import get_db
-from app.models.models import User, Agent, AgentTemplate, Correction
+from app.models.models import User, Agent, AgentTemplate, Correction, AgentTool
 from app.schemas.schemas import (
     TemplateResponse,
     TemplateCreate,
@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     AgentResponse,
 )
 from app.api.auth import get_current_user
+from app.tools.builtin_agent_tools import BUILTIN_TOOL_DEFINITIONS
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
 
@@ -84,6 +85,24 @@ async def create_agent_from_template(
     )
     
     db.add(agent)
+    db.flush()
+
+    for tool_type in request.enabled_tools or []:
+        definition = BUILTIN_TOOL_DEFINITIONS.get(tool_type)
+        if not definition:
+            continue
+        tool_settings = (request.tool_settings or {}).get(tool_type) or {}
+        db.add(
+            AgentTool(
+                agent_id=agent.id,
+                name=definition["name"],
+                description=definition["description"],
+                tool_type=tool_type,
+                request_body_template=tool_settings,
+                is_active=True,
+            )
+        )
+
     db.commit()
     db.refresh(agent)
     

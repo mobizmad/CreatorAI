@@ -9,6 +9,7 @@ from app.schemas.schemas import PublicChatRequest, PublicChatResponse
 from app.core.agent_graph import AgentExecutor
 from app.services.vector_store import VectorStoreService
 from app.services.rate_limiter import get_rate_limiter
+from app.services.token_service import TokenManager
 from app.api.api_keys import verify_api_key
 
 router = APIRouter(prefix="/v1", tags=["Public API"])
@@ -66,6 +67,7 @@ async def public_chat(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found",
         )
+    TokenManager.check_balance(agent.user, TokenManager.llm_cost(agent.llm_provider, request.message))
 
     # Resolve session
     session_id = request.session_id
@@ -106,6 +108,7 @@ async def public_chat(
         )
 
         result = await executor.run(request.message)
+        usage_cost = TokenManager.llm_cost(agent.llm_provider, request.message, result["response"])
 
         # Save message
         chat_log = ChatLog(
@@ -129,6 +132,9 @@ async def public_chat(
         api_key.usage_count = (api_key.usage_count or 0) + 1
         api_key.last_used_at = datetime.utcnow()
 
+        TokenManager.check_balance(agent.user, usage_cost)
+        agent.user.token_balance -= usage_cost
+        db.add(agent.user)
         db.commit()
 
         return PublicChatResponse(
@@ -139,6 +145,9 @@ async def public_chat(
             usage_remaining=remaining,  # NEW: Show remaining requests
         )
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(

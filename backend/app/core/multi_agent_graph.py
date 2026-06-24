@@ -20,6 +20,9 @@ from app.tools.web_search import create_web_search_tool
 from app.tools.custom_api import create_custom_api_tool, APIToolConfig
 from app.models.models import Agent, AgentTool
 
+DEFAULT_OLLAMA_AGENT_MODEL = "gemma4:latest"
+OPENAI_ONLY_MODELS = {"gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"}
+
 
 class MultiAgentState(TypedDict):
     """State shared across all agents"""
@@ -221,10 +224,16 @@ class MultiAgentExecutor:
         self.agent = db.query(Agent).filter(Agent.id == agent_id).first()
         if not self.agent:
             raise ValueError(f"Agent {agent_id} not found")
+
+        llm_model = self.agent.llm_model
+        if self.agent.llm_provider == "ollama" and (
+            not llm_model or llm_model in OPENAI_ONLY_MODELS or llm_model.startswith("gpt-")
+        ):
+            llm_model = DEFAULT_OLLAMA_AGENT_MODEL
         
         self.llm = LLMGateway(
             provider=self.agent.llm_provider,
-            model=self.agent.llm_model,
+            model=llm_model,
             temperature=self.agent.temperature,
             api_key=self.agent.api_key,
         )
@@ -265,7 +274,8 @@ class MultiAgentExecutor:
             self.db.query(AgentTool)
             .filter(
                 AgentTool.agent_id == self.agent_id,
-                AgentTool.is_active == True
+                AgentTool.is_active == True,
+                AgentTool.tool_type == "custom_api",
             )
             .all()
         )

@@ -45,7 +45,7 @@ export default function FineTuneUploader({ agentId, isTraining }: FineTuneUpload
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/agents/${agentId}/finetune/upload`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com'}/agents/${agentId}/finetune/upload`,
         {
           method: 'POST',
           headers: {
@@ -81,7 +81,7 @@ export default function FineTuneUploader({ agentId, isTraining }: FineTuneUpload
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/agents/${agentId}/model`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com'}/agents/${agentId}/model`,
         {
           method: 'PATCH',
           headers: {
