@@ -87,6 +87,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [leadDraft, setLeadDraft] = useState({ provider: 'line', name: '', phone: '', email: '', requirement: '' });
   const [broadcastDraft, setBroadcastDraft] = useState({ provider: 'line', title: '', message: '', target: 'all', status: 'draft' });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const selectedConversation = useMemo(
@@ -100,6 +101,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const query = provider === 'all' ? '' : `?provider=${provider}`;
       const [conversationRes, leadRes, broadcastRes, integrationRes] = await Promise.all([
@@ -108,12 +110,18 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
         fetch(`${API}/agents/${agentId}/channel-broadcasts`, { headers: authHeaders() }),
         fetch(`${API}/agents/${agentId}/integrations`, { headers: authHeaders() }),
       ]);
+      if (!conversationRes.ok || !leadRes.ok || !broadcastRes.ok || !integrationRes.ok) {
+        throw new Error('Could not load channel data. Please login again and retry.');
+      }
       const conversationData = conversationRes.ok ? await conversationRes.json() : [];
       setConversations(conversationData);
       setLeads(leadRes.ok ? await leadRes.json() : []);
       setBroadcasts(broadcastRes.ok ? await broadcastRes.json() : []);
       setIntegrations(integrationRes.ok ? await integrationRes.json() : []);
       if (!selectedId && conversationData[0]) setSelectedId(conversationData[0].id);
+    } catch (error) {
+      console.error('Failed to load channel data:', error);
+      setLoadError(error instanceof Error ? error.message : 'Could not load channel data.');
     } finally {
       setLoading(false);
     }
@@ -239,6 +247,10 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
         <div className="flex items-center justify-center rounded-lg bg-white py-12 text-gray-500 shadow dark:bg-gray-950">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           Loading channels...
+        </div>
+      ) : loadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+          {loadError}
         </div>
       ) : (
         <>
