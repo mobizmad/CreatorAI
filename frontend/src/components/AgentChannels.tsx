@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, Bot, Clock, Inbox, KeyRound, Loader2, Megaphone, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
@@ -88,6 +88,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [broadcastDraft, setBroadcastDraft] = useState({ provider: 'line', title: '', message: '', target: 'all', status: 'draft' });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [sendError, setSendError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const selectedConversation = useMemo(
@@ -95,12 +96,8 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     [conversations, selectedId]
   );
 
-  useEffect(() => {
-    loadAll();
-  }, [agentId, provider]);
-
-  const loadAll = async () => {
-    setLoading(true);
+  const loadAll = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     setLoadError('');
     try {
       const query = provider === 'all' ? '' : `?provider=${provider}`;
@@ -123,9 +120,15 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       console.error('Failed to load channel data:', error);
       setLoadError(error instanceof Error ? error.message : 'Could not load channel data.');
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
-  };
+  }, [agentId, provider, selectedId]);
+
+  useEffect(() => {
+    loadAll();
+    const interval = window.setInterval(() => loadAll(false), 5000);
+    return () => window.clearInterval(interval);
+  }, [loadAll]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
     await fetch(`${API}/agents/${agentId}/channel-conversations/${conversation.id}`, {
@@ -139,14 +142,21 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const sendManualReply = async () => {
     if (!selectedConversation || !replyText.trim()) return;
     setSaving(true);
+    setSendError('');
     try {
-      await fetch(`${API}/agents/${agentId}/channel-conversations/${selectedConversation.id}/messages`, {
+      const response = await fetch(`${API}/agents/${agentId}/channel-conversations/${selectedConversation.id}/messages`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ text: replyText.trim() }),
       });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.detail || 'Message was not delivered.');
+      }
       setReplyText('');
       await loadAll();
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Message was not delivered.');
     } finally {
       setSaving(false);
     }
@@ -288,7 +298,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
-                        <p className="text-sm capitalize text-gray-500">{selectedConversation.provider} channel</p>
+                        <p className="text-sm capitalize text-gray-500">{selectedConversation.provider} channel · live refresh</p>
                       </div>
                       <button
                         onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
@@ -306,16 +316,23 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2 border-t border-gray-200 p-4 dark:border-gray-800">
-                      <input
-                        value={replyText}
-                        onChange={(event) => setReplyText(event.target.value)}
-                        placeholder="Manual reply note..."
-                        className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                      />
-                      <button onClick={sendManualReply} disabled={saving} className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
-                        <Send className="h-4 w-4" />
-                      </button>
+                    <div className="border-t border-gray-200 p-4 dark:border-gray-800">
+                      {sendError && (
+                        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                          {sendError}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          value={replyText}
+                          onChange={(event) => setReplyText(event.target.value)}
+                          placeholder="Manual reply to customer..."
+                          className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                        />
+                        <button onClick={sendManualReply} disabled={saving} className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
+                          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (

@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import asyncio
+import httpx
 from fastapi import BackgroundTasks
 from fastapi import UploadFile, File
 from openai import AsyncOpenAI
@@ -103,6 +104,43 @@ def verify_agent_owner(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return agent
+
+
+async def push_line_message(access_token: str | None, to: str | None, text: str) -> None:
+    if not access_token or not to:
+        raise HTTPException(status_code=400, detail="LINE access token or customer ID is missing.")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            "https://api.line.me/v2/bot/message/push",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "to": to,
+                "messages": [{"type": "text", "text": text[:5000]}],
+            },
+        )
+    if response.status_code >= 300:
+        raise HTTPException(
+            status_code=502,
+            detail=f"LINE did not accept the manual reply: {response.text[:300]}",
+        )
+
+
+async def push_telegram_message(bot_token: str | None, chat_id: str | None, text: str) -> None:
+    if not bot_token or not chat_id:
+        raise HTTPException(status_code=400, detail="Telegram bot token or chat ID is missing.")
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={"chat_id": chat_id, "text": text[:4096]},
+        )
+    if response.status_code >= 300:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Telegram did not accept the manual reply: {response.text[:300]}",
+        )
 
 
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
@@ -294,6 +332,33 @@ async def send_channel_message(
     )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+
+    integration = (
+        db.query(AgentIntegration)
+        .filter(
+            AgentIntegration.agent_id == agent_id,
+            AgentIntegration.provider == conversation.provider,
+            AgentIntegration.is_active == True,
+        )
+        .first()
+    )
+    if conversation.provider == "line":
+        if not integration:
+            raise HTTPException(status_code=404, detail="LINE integration is not active for this agent.")
+        await push_line_message(
+            integration.access_token,
+            conversation.external_chat_id or conversation.external_user_id,
+            payload.text,
+        )
+    elif conversation.provider == "telegram":
+        if not integration:
+            raise HTTPException(status_code=404, detail="Telegram integration is not active for this agent.")
+        await push_telegram_message(
+            integration.bot_token,
+            conversation.external_chat_id or conversation.external_user_id,
+            payload.text,
+        )
+
     message = ChannelMessage(
         conversation_id=conversation.id,
         direction="outbound",
