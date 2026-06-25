@@ -13,7 +13,6 @@ import {
   SplitSquareHorizontal,
   TrendingUp,
   Wrench,
-  Radio,
 } from 'lucide-react';
 
 import ChatInterface from '@/components/ChatInterface';
@@ -23,7 +22,6 @@ import FineTuneUploader from '@/components/FineTuneUploader';
 import ModelComparison from '@/components/ModelComparison';
 import AgentTools from '@/components/AgentTools';
 import AgentIntegrations from '@/components/AgentIntegrations';
-import AgentChannels from '@/components/AgentChannels';
 import PublishWidget from '@/components/PublishWidget';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import DashboardSidebar from '@/components/DashboardSidebar';
@@ -37,7 +35,6 @@ type ActiveTab =
   | 'corrections'
   | 'finetune'
   | 'compare'
-  | 'channels'
   | 'analytics'
   | 'settings';
 
@@ -285,17 +282,6 @@ export default function AgentPlayground() {
                   >
                     <Wrench className="w-5 h-5" />
                     <span className="font-medium">Settings & Tools</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('channels')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'channels'
-                      ? 'bg-primary-500 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                  >
-                    <Radio className="w-5 h-5" />
-                    <span className="font-medium">Channels</span>
                   </button>
 
                   <button
@@ -657,9 +643,6 @@ export default function AgentPlayground() {
                   </div>
                 )}
 
-                {activeTab === 'channels' && (
-                  <AgentChannels agentId={agentId} />
-                )}
               </section>
             </div>
           </div>

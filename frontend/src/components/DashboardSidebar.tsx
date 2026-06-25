@@ -13,6 +13,7 @@ import {
   Sun,
   Wand2,
   Film,
+  Radio,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { agentAPI, authAPI } from '@/lib/api';
@@ -136,6 +137,17 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
           >
             <Wand2 className="w-4 h-4" />
             AI Studio
+          </button>
+          <button
+            onClick={() => handleNavigate('channels')}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === 'channels' && pathname === '/dashboard'
+                ? 'bg-white text-gray-950'
+                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <Radio className="w-4 h-4" />
+            Channels
           </button>
           <button
             onClick={() => handleNavigate('media-editor')}

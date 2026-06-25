@@ -19,12 +19,13 @@ import {
 import AIStudio from '@/components/AIStudio';
 import MediaEditor from '@/components/MediaEditor';
 import AgentCard from '@/components/AgentCard';
+import AgentChannels from '@/components/AgentChannels';
 import DefaultChatInterface from '@/components/DefaultChatInterface';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { agentAPI, authAPI } from '@/lib/api';
 import type { Agent, User } from '@/lib/types';
 
-type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'media-editor';
+type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor';
 
 interface MarketplaceAgent {
   id: string;
@@ -52,6 +53,7 @@ export default function Dashboard() {
   const [marketplaceSearch, setMarketplaceSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [selectedChannelAgentId, setSelectedChannelAgentId] = useState('');
 
   useEffect(() => {
     loadAgents();
@@ -62,10 +64,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     const view = searchParams.get('view') as DashboardView | null;
-    if (view && ['chat', 'agents', 'marketplace', 'studio', 'media-editor'].includes(view)) {
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor'].includes(view)) {
       setActiveView(view);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const agentId = searchParams.get('agent');
+    if (agentId) setSelectedChannelAgentId(agentId);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!selectedChannelAgentId && agents[0]) {
+      setSelectedChannelAgentId(agents[0].id);
+    }
+  }, [agents, selectedChannelAgentId]);
 
   useEffect(() => {
     if (activeView !== 'marketplace') return;
@@ -161,8 +174,79 @@ export default function Dashboard() {
           />
         )}
         {activeView === 'studio' && <AIStudio />}
+        {activeView === 'channels' && (
+          <ChannelsView
+            agents={agents}
+            selectedAgentId={selectedChannelAgentId}
+            onSelectAgent={(agentId) => {
+              setSelectedChannelAgentId(agentId);
+              router.push(`/dashboard?view=channels&agent=${agentId}`);
+            }}
+            onCreate={() => router.push('/templates')}
+          />
+        )}
         {activeView === 'media-editor' && <MediaEditor />}
       </main>
+    </div>
+  );
+}
+
+function ChannelsView({
+  agents,
+  selectedAgentId,
+  onSelectAgent,
+  onCreate,
+}: {
+  agents: Agent[];
+  selectedAgentId: string;
+  onSelectAgent: (agentId: string) => void;
+  onCreate: () => void;
+}) {
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) || agents[0];
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Channels</h1>
+            <p className="mt-1 text-gray-600 dark:text-gray-400">Manage LINE, Telegram, Facebook inboxes, rules, leads, and broadcasts.</p>
+          </div>
+          {agents.length > 0 && (
+            <label className="w-full lg:w-80">
+              <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Agent</span>
+              <select
+                value={selectedAgent?.id || ''}
+                onChange={(event) => onSelectAgent(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+              >
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+
+        {!selectedAgent ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white py-16 text-center dark:border-gray-800 dark:bg-gray-950">
+            <Bot className="mx-auto h-12 w-12 text-gray-300" />
+            <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">No agents yet</h2>
+            <p className="mt-1 text-sm text-gray-500">Create an agent first, then connect LINE, Telegram, or Facebook channels.</p>
+            <button
+              onClick={onCreate}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-600"
+            >
+              <Plus className="w-4 h-4" />
+              Create Agent
+            </button>
+          </div>
+        ) : (
+          <AgentChannels agentId={selectedAgent.id} />
+        )}
+      </div>
     </div>
   );
 }
