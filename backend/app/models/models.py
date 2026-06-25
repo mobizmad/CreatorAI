@@ -58,6 +58,9 @@ class Agent(Base):
     sessions = relationship("ConversationSession", back_populates="agent", cascade="all, delete-orphan")
     tools = relationship("AgentTool", back_populates="agent", cascade="all, delete-orphan") # NEW
     integrations = relationship("AgentIntegration", back_populates="agent", cascade="all, delete-orphan")
+    channel_conversations = relationship("ChannelConversation", back_populates="agent", cascade="all, delete-orphan")
+    channel_leads = relationship("ChannelLead", back_populates="agent", cascade="all, delete-orphan")
+    channel_broadcasts = relationship("ChannelBroadcast", back_populates="agent", cascade="all, delete-orphan")
 
 
 # ─────────────────────────────────────────
@@ -109,11 +112,94 @@ class AgentIntegration(Base):
     webhook_url = Column(Text, nullable=True)
     required_scopes = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
+    auto_reply_enabled = Column(Boolean, default=True)
+    human_takeover_enabled = Column(Boolean, default=False)
+    business_hours_enabled = Column(Boolean, default=False)
+    business_hours_timezone = Column(String, default="Asia/Bangkok")
+    business_hours_start = Column(String, default="09:00")
+    business_hours_end = Column(String, default="18:00")
+    after_hours_message = Column(Text, nullable=True)
+    channel_prompt = Column(Text, nullable=True)
+    fallback_message = Column(Text, nullable=True)
     is_active = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     agent = relationship("Agent", back_populates="integrations")
+
+
+class ChannelConversation(Base):
+    """Conversation thread from an external channel like LINE or Telegram."""
+    __tablename__ = "channel_conversations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)
+    external_user_id = Column(String, nullable=False)
+    external_chat_id = Column(String, nullable=True)
+    display_name = Column(String, nullable=True)
+    status = Column(String, default="open")  # open, paused, closed
+    human_takeover = Column(Boolean, default=False)
+    last_message_preview = Column(Text, nullable=True)
+    last_message_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    agent = relationship("Agent", back_populates="channel_conversations")
+    messages = relationship("ChannelMessage", back_populates="conversation", cascade="all, delete-orphan", order_by="ChannelMessage.created_at")
+
+
+class ChannelMessage(Base):
+    """Single inbound or outbound message inside a channel conversation."""
+    __tablename__ = "channel_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("channel_conversations.id", ondelete="CASCADE"), nullable=False)
+    direction = Column(String, nullable=False)  # inbound, outbound
+    sender_type = Column(String, nullable=False)  # user, agent, human, system
+    text = Column(Text, nullable=False)
+    raw_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("ChannelConversation", back_populates="messages")
+
+
+class ChannelLead(Base):
+    """Contact details collected from external channel conversations."""
+    __tablename__ = "channel_leads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)
+    external_user_id = Column(String, nullable=True)
+    name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    requirement = Column(Text, nullable=True)
+    status = Column(String, default="new")
+    source_conversation_id = Column(UUID(as_uuid=True), ForeignKey("channel_conversations.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    agent = relationship("Agent", back_populates="channel_leads")
+
+
+class ChannelBroadcast(Base):
+    """Broadcast draft/history for connected external channels."""
+    __tablename__ = "channel_broadcasts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    provider = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    message = Column(Text, nullable=False)
+    target = Column(String, default="all")
+    status = Column(String, default="draft")  # draft, queued, sent, failed
+    sent_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    sent_at = Column(DateTime, nullable=True)
+
+    agent = relationship("Agent", back_populates="channel_broadcasts")
 
 
 class AgentTemplate(Base):

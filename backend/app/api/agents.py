@@ -10,9 +10,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
+from datetime import datetime
 
 from app.db.database import get_db
-from app.models.models import User, Agent, AgentTool, AgentIntegration
+from app.models.models import (
+    User,
+    Agent,
+    AgentTool,
+    AgentIntegration,
+    ChannelBroadcast,
+    ChannelConversation,
+    ChannelLead,
+    ChannelMessage,
+)
 from app.config import settings
 from app.schemas.schemas import (
     AgentCreate,
@@ -21,6 +31,14 @@ from app.schemas.schemas import (
     AgentModelUpdate,
     AgentIntegrationUpsert,
     AgentIntegrationResponse,
+    ChannelBroadcastCreate,
+    ChannelBroadcastResponse,
+    ChannelConversationResponse,
+    ChannelConversationUpdate,
+    ChannelLeadCreate,
+    ChannelLeadResponse,
+    ChannelMessageCreate,
+    ChannelMessageResponse,
 )
 from app.api.auth import get_current_user
 from app.tools.builtin_agent_tools import BUILTIN_TOOL_DEFINITIONS
@@ -61,6 +79,15 @@ def mask_integration(integration: AgentIntegration) -> AgentIntegrationResponse:
         webhook_url=integration.webhook_url,
         required_scopes=integration.required_scopes,
         notes=integration.notes,
+        auto_reply_enabled=integration.auto_reply_enabled if integration.auto_reply_enabled is not None else True,
+        human_takeover_enabled=integration.human_takeover_enabled or False,
+        business_hours_enabled=integration.business_hours_enabled or False,
+        business_hours_timezone=integration.business_hours_timezone,
+        business_hours_start=integration.business_hours_start,
+        business_hours_end=integration.business_hours_end,
+        after_hours_message=integration.after_hours_message,
+        channel_prompt=integration.channel_prompt,
+        fallback_message=integration.fallback_message,
         is_active=integration.is_active,
         created_at=integration.created_at,
         updated_at=integration.updated_at,
@@ -207,6 +234,140 @@ async def delete_agent_integration(
         db.delete(integration)
         db.commit()
     return None
+
+
+@router.get("/{agent_id}/channel-conversations", response_model=List[ChannelConversationResponse])
+async def list_channel_conversations(
+    agent_id: UUID,
+    provider: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    query = db.query(ChannelConversation).filter(ChannelConversation.agent_id == agent_id)
+    if provider and provider != "all":
+        query = query.filter(ChannelConversation.provider == provider)
+    return query.order_by(ChannelConversation.last_message_at.desc()).limit(100).all()
+
+
+@router.patch("/{agent_id}/channel-conversations/{conversation_id}", response_model=ChannelConversationResponse)
+async def update_channel_conversation(
+    agent_id: UUID,
+    conversation_id: UUID,
+    payload: ChannelConversationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    conversation = (
+        db.query(ChannelConversation)
+        .filter(ChannelConversation.id == conversation_id, ChannelConversation.agent_id == agent_id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(conversation, field, value)
+    db.commit()
+    db.refresh(conversation)
+    return conversation
+
+
+@router.post(
+    "/{agent_id}/channel-conversations/{conversation_id}/messages",
+    response_model=ChannelMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_channel_message(
+    agent_id: UUID,
+    conversation_id: UUID,
+    payload: ChannelMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    conversation = (
+        db.query(ChannelConversation)
+        .filter(ChannelConversation.id == conversation_id, ChannelConversation.agent_id == agent_id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    message = ChannelMessage(
+        conversation_id=conversation.id,
+        direction="outbound",
+        sender_type="human",
+        text=payload.text,
+    )
+    conversation.last_message_preview = payload.text[:180]
+    conversation.last_message_at = datetime.utcnow()
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    return message
+
+
+@router.get("/{agent_id}/channel-leads", response_model=List[ChannelLeadResponse])
+async def list_channel_leads(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    return (
+        db.query(ChannelLead)
+        .filter(ChannelLead.agent_id == agent_id)
+        .order_by(ChannelLead.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+
+@router.post("/{agent_id}/channel-leads", response_model=ChannelLeadResponse, status_code=status.HTTP_201_CREATED)
+async def create_channel_lead(
+    agent_id: UUID,
+    payload: ChannelLeadCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    lead = ChannelLead(agent_id=agent_id, **payload.model_dump())
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
+@router.get("/{agent_id}/channel-broadcasts", response_model=List[ChannelBroadcastResponse])
+async def list_channel_broadcasts(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    return (
+        db.query(ChannelBroadcast)
+        .filter(ChannelBroadcast.agent_id == agent_id)
+        .order_by(ChannelBroadcast.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+
+@router.post("/{agent_id}/channel-broadcasts", response_model=ChannelBroadcastResponse, status_code=status.HTTP_201_CREATED)
+async def create_channel_broadcast(
+    agent_id: UUID,
+    payload: ChannelBroadcastCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    verify_agent_owner(agent_id, current_user.id, db)
+    broadcast = ChannelBroadcast(agent_id=agent_id, **payload.model_dump())
+    db.add(broadcast)
+    db.commit()
+    db.refresh(broadcast)
+    return broadcast
 
 @router.patch("/{agent_id}", response_model=AgentResponse)
 async def update_agent(

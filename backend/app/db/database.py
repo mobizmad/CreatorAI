@@ -41,3 +41,20 @@ def ensure_schema_updates():
                 conn.execute(text("ALTER TABLE ai_studio_generations ADD COLUMN quality VARCHAR"))
             if "source_image_url" not in studio_columns:
                 conn.execute(text("ALTER TABLE ai_studio_generations ADD COLUMN source_image_url TEXT"))
+
+        if "agent_integrations" in table_names:
+            integration_columns = {column["name"] for column in inspector.get_columns("agent_integrations")}
+            integration_additions = {
+                "auto_reply_enabled": "BOOLEAN DEFAULT TRUE",
+                "human_takeover_enabled": "BOOLEAN DEFAULT FALSE",
+                "business_hours_enabled": "BOOLEAN DEFAULT FALSE",
+                "business_hours_timezone": "VARCHAR DEFAULT 'Asia/Bangkok'",
+                "business_hours_start": "VARCHAR DEFAULT '09:00'",
+                "business_hours_end": "VARCHAR DEFAULT '18:00'",
+                "after_hours_message": "TEXT",
+                "channel_prompt": "TEXT",
+                "fallback_message": "TEXT",
+            }
+            for column_name, column_type in integration_additions.items():
+                if column_name not in integration_columns:
+                    conn.execute(text(f"ALTER TABLE agent_integrations ADD COLUMN {column_name} {column_type}"))

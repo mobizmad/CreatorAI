@@ -298,6 +298,15 @@ class AgentIntegrationUpsert(BaseModel):
     verify_token: Optional[str] = None
     required_scopes: Optional[str] = None
     notes: Optional[str] = None
+    auto_reply_enabled: Optional[bool] = None
+    human_takeover_enabled: Optional[bool] = None
+    business_hours_enabled: Optional[bool] = None
+    business_hours_timezone: Optional[str] = None
+    business_hours_start: Optional[str] = None
+    business_hours_end: Optional[str] = None
+    after_hours_message: Optional[str] = None
+    channel_prompt: Optional[str] = None
+    fallback_message: Optional[str] = None
     is_active: bool = False
 
 
@@ -318,9 +327,98 @@ class AgentIntegrationResponse(BaseModel):
     webhook_url: Optional[str]
     required_scopes: Optional[str]
     notes: Optional[str]
+    auto_reply_enabled: bool
+    human_takeover_enabled: bool
+    business_hours_enabled: bool
+    business_hours_timezone: Optional[str]
+    business_hours_start: Optional[str]
+    business_hours_end: Optional[str]
+    after_hours_message: Optional[str]
+    channel_prompt: Optional[str]
+    fallback_message: Optional[str]
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
+
+
+class ChannelMessageCreate(BaseModel):
+    text: str
+
+
+class ChannelMessageResponse(BaseModel):
+    id: UUID
+    conversation_id: UUID
+    direction: str
+    sender_type: str
+    text: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelConversationResponse(BaseModel):
+    id: UUID
+    agent_id: UUID
+    provider: str
+    external_user_id: str
+    external_chat_id: Optional[str]
+    display_name: Optional[str]
+    status: str
+    human_takeover: bool
+    last_message_preview: Optional[str]
+    last_message_at: datetime
+    created_at: datetime
+    messages: List[ChannelMessageResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelConversationUpdate(BaseModel):
+    status: Optional[str] = None
+    human_takeover: Optional[bool] = None
+
+
+class ChannelLeadCreate(BaseModel):
+    provider: str
+    external_user_id: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    requirement: Optional[str] = None
+    status: str = "new"
+    source_conversation_id: Optional[UUID] = None
+
+
+class ChannelLeadResponse(ChannelLeadCreate):
+    id: UUID
+    agent_id: UUID
+    created_at: datetime
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelBroadcastCreate(BaseModel):
+    provider: str
+    title: Optional[str] = None
+    message: str
+    target: str = "all"
+    status: str = "draft"
+
+
+class ChannelBroadcastResponse(ChannelBroadcastCreate):
+    id: UUID
+    agent_id: UUID
+    sent_count: int
+    failed_count: int
+    created_at: datetime
+    sent_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
 
 
 class ImprovementSuggestion(BaseModel):

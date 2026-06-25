@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Bot,
   ChevronRight,
@@ -43,6 +43,7 @@ const MARKETPLACE_CATEGORIES = ['All', 'General', 'Support', 'Education', 'HR', 
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState<DashboardView>('chat');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [marketplaceAgents, setMarketplaceAgents] = useState<MarketplaceAgent[]>([]);
@@ -58,6 +59,13 @@ export default function Dashboard() {
     const interval = setInterval(loadAgents, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const view = searchParams.get('view') as DashboardView | null;
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'media-editor'].includes(view)) {
+      setActiveView(view);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (activeView !== 'marketplace') return;
@@ -127,7 +135,14 @@ export default function Dashboard() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      <DashboardSidebar activeViewOverride={activeView} onNavigate={(view) => setActiveView(view as DashboardView)} />
+      <DashboardSidebar
+        activeViewOverride={activeView}
+        onNavigate={(view) => {
+          const nextView = view as DashboardView;
+          setActiveView(nextView);
+          router.push(nextView === 'chat' ? '/dashboard' : `/dashboard?view=${nextView}`);
+        }}
+      />
 
       <main className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900">
         {activeView === 'chat' && <DefaultChatInterface />}

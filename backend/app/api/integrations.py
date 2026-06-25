@@ -3,9 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.db.database import get_db
-from app.models.models import AgentIntegration
+from app.models.models import AgentIntegration, ChannelConversation, ChannelMessage
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 
@@ -23,6 +24,54 @@ def get_active_integration(db: Session, agent_id: UUID, provider: str) -> AgentI
     if not integration:
         raise HTTPException(status_code=404, detail="Integration is not active for this agent.")
     return integration
+
+
+def record_channel_message(
+    db: Session,
+    agent_id: UUID,
+    provider: str,
+    external_user_id: str,
+    text: str,
+    external_chat_id: str | None = None,
+    display_name: str | None = None,
+    raw_payload: dict | None = None,
+) -> ChannelConversation:
+    conversation = (
+        db.query(ChannelConversation)
+        .filter(
+            ChannelConversation.agent_id == agent_id,
+            ChannelConversation.provider == provider,
+            ChannelConversation.external_user_id == external_user_id,
+        )
+        .first()
+    )
+    if not conversation:
+        conversation = ChannelConversation(
+            agent_id=agent_id,
+            provider=provider,
+            external_user_id=external_user_id,
+            external_chat_id=external_chat_id,
+            display_name=display_name,
+        )
+        db.add(conversation)
+        db.flush()
+
+    conversation.external_chat_id = external_chat_id or conversation.external_chat_id
+    conversation.display_name = display_name or conversation.display_name
+    conversation.last_message_preview = text[:180]
+    conversation.last_message_at = datetime.utcnow()
+    db.add(
+        ChannelMessage(
+            conversation_id=conversation.id,
+            direction="inbound",
+            sender_type="user",
+            text=text,
+            raw_payload=raw_payload,
+        )
+    )
+    db.commit()
+    db.refresh(conversation)
+    return conversation
 
 
 @router.get("/facebook/webhook/{agent_id}")
@@ -48,11 +97,49 @@ async def receive_facebook_webhook(agent_id: UUID, request: Request, db: Session
 async def receive_line_webhook(agent_id: UUID, request: Request, db: Session = Depends(get_db)):
     get_active_integration(db, agent_id, "line")
     payload = await request.json()
-    return {"status": "received", "provider": "line", "agent_id": str(agent_id), "events": len(payload.get("events", []))}
+    recorded = 0
+    for event in payload.get("events", []):
+        message = event.get("message") or {}
+        if event.get("type") != "message" or message.get("type") != "text":
+            continue
+        source = event.get("source") or {}
+        user_id = source.get("userId") or source.get("groupId") or source.get("roomId") or "unknown"
+        record_channel_message(
+            db,
+            agent_id,
+            "line",
+            user_id,
+            message.get("text") or "",
+            external_chat_id=source.get("groupId") or source.get("roomId") or user_id,
+            raw_payload=event,
+        )
+        recorded += 1
+    return {"status": "received", "provider": "line", "agent_id": str(agent_id), "events": len(payload.get("events", [])), "recorded": recorded}
 
 
 @router.post("/telegram/webhook/{agent_id}")
 async def receive_telegram_webhook(agent_id: UUID, request: Request, db: Session = Depends(get_db)):
     get_active_integration(db, agent_id, "telegram")
     payload = await request.json()
-    return {"status": "received", "provider": "telegram", "agent_id": str(agent_id), "update_id": payload.get("update_id")}
+    message = payload.get("message") or payload.get("edited_message") or {}
+    text = message.get("text")
+    recorded = 0
+    if text:
+        chat = message.get("chat") or {}
+        sender = message.get("from") or {}
+        external_user_id = str(sender.get("id") or chat.get("id") or "unknown")
+        display_name = " ".join(
+            part for part in [sender.get("first_name"), sender.get("last_name")] if part
+        ) or sender.get("username")
+        record_channel_message(
+            db,
+            agent_id,
+            "telegram",
+            external_user_id,
+            text,
+            external_chat_id=str(chat.get("id") or external_user_id),
+            display_name=display_name,
+            raw_payload=payload,
+        )
+        recorded = 1
+    return {"status": "received", "provider": "telegram", "agent_id": str(agent_id), "update_id": payload.get("update_id"), "recorded": recorded}
