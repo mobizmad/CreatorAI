@@ -69,6 +69,12 @@ const authHeaders = () => ({
   Authorization: `Bearer ${localStorage.getItem('token')}`,
 });
 
+const customerLabel = (conversation: ChannelConversation) => {
+  if (conversation.display_name) return conversation.display_name;
+  const suffix = conversation.external_user_id?.slice(-6) || 'unknown';
+  return `${conversation.provider} customer ${suffix}`;
+};
+
 export default function AgentChannels({ agentId }: { agentId: string }) {
   const [activeView, setActiveView] = useState<'inbox' | 'credentials' | 'rules' | 'leads' | 'broadcast'>('inbox');
   const [provider, setProvider] = useState<Provider>('all');
@@ -256,7 +262,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                           <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium capitalize text-gray-600 dark:bg-gray-800 dark:text-gray-300">{conversation.provider}</span>
                           {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Paused</span>}
                         </div>
-                        <p className="mt-2 truncate font-medium text-gray-900 dark:text-white">{conversation.display_name || conversation.external_user_id}</p>
+                        <p className="mt-2 truncate font-medium text-gray-900 dark:text-white">{customerLabel(conversation)}</p>
                         <p className="mt-1 line-clamp-2 text-sm text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
                       </button>
                     ))
@@ -269,7 +275,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                   <div className="flex h-full min-h-[520px] flex-col">
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{selectedConversation.display_name || selectedConversation.external_user_id}</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
                         <p className="text-sm capitalize text-gray-500">{selectedConversation.provider} channel</p>
                       </div>
                       <button
