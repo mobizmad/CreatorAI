@@ -21,7 +21,6 @@ import CorrectionModal from '@/components/CorrectionModal';
 import FineTuneUploader from '@/components/FineTuneUploader';
 import ModelComparison from '@/components/ModelComparison';
 import AgentTools from '@/components/AgentTools';
-import AgentIntegrations from '@/components/AgentIntegrations';
 import PublishWidget from '@/components/PublishWidget';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import DashboardSidebar from '@/components/DashboardSidebar';
@@ -491,7 +490,6 @@ export default function AgentPlayground() {
                     </div>
 
                     <AgentTools agentId={agentId} />
-                    <AgentIntegrations agentId={agentId} />
                   </div>
                 )}
 

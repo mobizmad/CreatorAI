@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Bot, Clock, Inbox, Loader2, Megaphone, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
+import { Bell, Bot, Clock, Inbox, KeyRound, Loader2, Megaphone, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
+import AgentIntegrations from './AgentIntegrations';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
 
@@ -69,7 +70,7 @@ const authHeaders = () => ({
 });
 
 export default function AgentChannels({ agentId }: { agentId: string }) {
-  const [activeView, setActiveView] = useState<'inbox' | 'rules' | 'leads' | 'broadcast'>('inbox');
+  const [activeView, setActiveView] = useState<'inbox' | 'credentials' | 'rules' | 'leads' | 'broadcast'>('inbox');
   const [provider, setProvider] = useState<Provider>('all');
   const [conversations, setConversations] = useState<ChannelConversation[]>([]);
   const [leads, setLeads] = useState<ChannelLead[]>([]);
@@ -185,6 +186,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   const tabs = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
+    { id: 'credentials', label: 'Credentials', icon: KeyRound },
     { id: 'rules', label: 'Rules', icon: Clock },
     { id: 'leads', label: 'Leads', icon: UserPlus },
     { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
@@ -210,7 +212,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
             ))}
           </div>
         </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-4">
+        <div className="mt-5 grid gap-2 sm:grid-cols-5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -305,10 +307,14 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
             </div>
           )}
 
+          {activeView === 'credentials' && (
+            <AgentIntegrations agentId={agentId} />
+          )}
+
           {activeView === 'rules' && (
             <div className="grid gap-5">
               {integrations.length === 0 ? (
-                <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow dark:bg-gray-950">Connect a channel first in Settings & Tools.</div>
+                <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow dark:bg-gray-950">Connect a channel first in Credentials.</div>
               ) : (
                 integrations.map((integration, index) => (
                   <RuleCard
