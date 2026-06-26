@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Bot, Clock, Inbox, KeyRound, Loader2, Megaphone, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
+import { Bell, Bot, Clock, Inbox, KeyRound, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -90,6 +90,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [loadError, setLoadError] = useState('');
   const [sendError, setSendError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [inboxFullscreen, setInboxFullscreen] = useState(false);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
@@ -152,6 +153,15 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     const interval = window.setInterval(() => loadConversations(), 5000);
     return () => window.clearInterval(interval);
   }, [activeView, loadConversations]);
+
+  useEffect(() => {
+    if (!inboxFullscreen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setInboxFullscreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inboxFullscreen]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
     await fetch(`${API}/agents/${agentId}/channel-conversations/${conversation.id}`, {
@@ -288,12 +298,12 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className="grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
-              <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-950">
+            <div className={inboxFullscreen ? 'fixed inset-0 z-50 grid gap-0 bg-gray-50 p-3 dark:bg-gray-900 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
+              <div className={`overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'rounded-l-lg border-r border-gray-200 dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
                 </div>
-                <div className="max-h-[calc(100vh-285px)] overflow-y-auto">
+                <div className={inboxFullscreen ? 'max-h-[calc(100vh-84px)] overflow-y-auto' : 'max-h-[calc(100vh-285px)] overflow-y-auto'}>
                   {conversations.length === 0 ? (
                     <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
                   ) : (
@@ -315,21 +325,31 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                 </div>
               </div>
 
-              <div className="rounded-lg bg-white shadow dark:bg-gray-950">
+              <div className={`bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'rounded-r-lg' : 'rounded-lg'}`}>
                 {selectedConversation ? (
-                  <div className="flex h-full min-h-[calc(100vh-210px)] flex-col">
+                  <div className={inboxFullscreen ? 'flex h-[calc(100vh-24px)] flex-col' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
                         <p className="text-sm capitalize text-gray-500">{selectedConversation.provider} channel · live refresh</p>
                       </div>
-                      <button
-                        onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
-                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}
-                      >
-                        {selectedConversation.human_takeover ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
-                        {selectedConversation.human_takeover ? 'AI Paused' : 'AI Active'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setInboxFullscreen((current) => !current)}
+                          className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                          title={inboxFullscreen ? 'Exit full screen' : 'Full screen'}
+                        >
+                          {inboxFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                          {inboxFullscreen ? 'Exit' : 'Full'}
+                        </button>
+                        <button
+                          onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}
+                        >
+                          {selectedConversation.human_takeover ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+                          {selectedConversation.human_takeover ? 'AI Paused' : 'AI Active'}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex-1 space-y-3 overflow-y-auto p-4">
                       {selectedConversation.messages.map((message) => (
