@@ -3,6 +3,7 @@ import os
 import tempfile
 import asyncio
 import httpx
+import secrets
 from fastapi import BackgroundTasks
 from fastapi import UploadFile, File
 from openai import AsyncOpenAI
@@ -36,6 +37,8 @@ from app.schemas.schemas import (
     ChannelBroadcastResponse,
     ChannelConversationResponse,
     ChannelConversationUpdate,
+    ChannelShareResponse,
+    ChannelShareUpdate,
     ChannelLeadCreate,
     ChannelLeadResponse,
     ChannelMessageCreate,
@@ -97,6 +100,12 @@ def mask_integration(integration: AgentIntegration) -> AgentIntegrationResponse:
 
 def build_webhook_url(provider: str, agent_id: UUID) -> str:
     return f"{settings.PUBLIC_API_BASE_URL.rstrip('/')}/integrations/{provider}/webhook/{agent_id}"
+
+
+def build_channel_share_url(agent: Agent) -> str | None:
+    if not agent.channel_share_enabled or not agent.channel_share_token:
+        return None
+    return f"{settings.PUBLIC_API_BASE_URL.rstrip('/')}/channel-inbox/{agent.id}?token={agent.channel_share_token}"
 
 
 def verify_agent_owner(agent_id: UUID, user_id: UUID, db: Session) -> Agent:
@@ -272,6 +281,44 @@ async def delete_agent_integration(
         db.delete(integration)
         db.commit()
     return None
+
+
+@router.get("/{agent_id}/channel-share", response_model=ChannelShareResponse)
+async def get_channel_share(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = verify_agent_owner(agent_id, current_user.id, db)
+    if agent.channel_share_enabled and not agent.channel_share_token:
+        agent.channel_share_token = secrets.token_urlsafe(32)
+        db.commit()
+        db.refresh(agent)
+    return ChannelShareResponse(
+        enabled=bool(agent.channel_share_enabled),
+        token=agent.channel_share_token if agent.channel_share_enabled else None,
+        url=build_channel_share_url(agent),
+    )
+
+
+@router.patch("/{agent_id}/channel-share", response_model=ChannelShareResponse)
+async def update_channel_share(
+    agent_id: UUID,
+    payload: ChannelShareUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = verify_agent_owner(agent_id, current_user.id, db)
+    agent.channel_share_enabled = payload.enabled
+    if payload.enabled and not agent.channel_share_token:
+        agent.channel_share_token = secrets.token_urlsafe(32)
+    db.commit()
+    db.refresh(agent)
+    return ChannelShareResponse(
+        enabled=bool(agent.channel_share_enabled),
+        token=agent.channel_share_token if agent.channel_share_enabled else None,
+        url=build_channel_share_url(agent),
+    )
 
 
 @router.get("/{agent_id}/channel-conversations", response_model=List[ChannelConversationResponse])

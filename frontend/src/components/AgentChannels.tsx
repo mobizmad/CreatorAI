@@ -91,9 +91,10 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [sendError, setSendError] = useState('');
   const [saving, setSaving] = useState(false);
   const [inboxFullscreen, setInboxFullscreen] = useState(false);
-  const [isPublicChat, setIsPublicChat] = useState(false);
+  const [isPublicChat, setIsPublicChat] = useState(true);
   const [isSharingSaving, setIsSharingSaving] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | null>(null);
+  const [channelShareUrl, setChannelShareUrl] = useState('');
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
@@ -149,10 +150,11 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   const loadShareStatus = useCallback(async () => {
     try {
-      const response = await fetch(`${API}/agents/${agentId}`, { headers: authHeaders() });
+      const response = await fetch(`${API}/agents/${agentId}/channel-share`, { headers: authHeaders() });
       if (!response.ok) return;
       const data = await response.json();
-      setIsPublicChat(Boolean(data.is_public));
+      setIsPublicChat(Boolean(data.enabled));
+      setChannelShareUrl(data.url || '');
     } catch (error) {
       console.error('Failed to load channel share status:', error);
     }
@@ -259,16 +261,18 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const togglePublicChat = async (nextValue: boolean) => {
     setIsSharingSaving(true);
     try {
-      const response = await fetch(`${API}/agents/${agentId}`, {
+      const response = await fetch(`${API}/agents/${agentId}/channel-share`, {
         method: 'PATCH',
         headers: authHeaders(),
-        body: JSON.stringify({ is_public: nextValue }),
+        body: JSON.stringify({ enabled: nextValue }),
       });
-      if (!response.ok) throw new Error('Could not update public chat sharing.');
-      setIsPublicChat(nextValue);
+      if (!response.ok) throw new Error('Could not update channel inbox sharing.');
+      const data = await response.json();
+      setIsPublicChat(Boolean(data.enabled));
+      setChannelShareUrl(data.url || '');
     } catch (error) {
-      console.error('Failed to update public chat sharing:', error);
-      alert('Could not update public chat sharing.');
+      console.error('Failed to update channel inbox sharing:', error);
+      alert('Could not update channel inbox sharing.');
     } finally {
       setIsSharingSaving(false);
     }
@@ -440,6 +444,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                 isPublic={isPublicChat}
                 saving={isSharingSaving}
                 copied={shareCopied}
+                shareUrl={channelShareUrl}
                 onToggle={togglePublicChat}
                 onCopy={copyShareText}
               />
@@ -575,6 +580,7 @@ function ChannelShareCard({
   isPublic,
   saving,
   copied,
+  shareUrl,
   onToggle,
   onCopy,
 }: {
@@ -582,25 +588,26 @@ function ChannelShareCard({
   isPublic: boolean;
   saving: boolean;
   copied: 'link' | 'embed' | null;
+  shareUrl: string;
   onToggle: (nextValue: boolean) => void;
   onCopy: (text: string, type: 'link' | 'embed') => void;
 }) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com';
-  const chatUrl = `${baseUrl}/widget/${agentId}`;
-  const embedCode = `<iframe\n  src="${chatUrl}"\n  width="400"\n  height="600"\n  style="border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0,0,0,0.07);"\n  frameborder="0"\n></iframe>`;
+  const chatUrl = shareUrl || `${baseUrl}/channel-inbox/${agentId}`;
+  const embedCode = `<iframe\n  src="${chatUrl}"\n  width="1200"\n  height="800"\n  style="border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0,0,0,0.07);"\n  frameborder="0"\n></iframe>`;
 
   return (
     <div className="rounded-lg bg-white p-5 shadow dark:bg-gray-950">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">Share Chat</h3>
-          <p className="mt-1 text-sm text-gray-500">Share this agent chat as a public widget link or embed.</p>
+          <h3 className="font-semibold text-gray-900 dark:text-white">Share Channel Inbox</h3>
+          <p className="mt-1 text-sm text-gray-500">Share the operator inbox for this agent's LINE, Telegram, and Facebook channels.</p>
         </div>
         <button
           onClick={() => onToggle(!isPublic)}
           disabled={saving}
           className={`relative h-7 w-14 rounded-full transition-colors disabled:opacity-60 ${isPublic ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
-          title={isPublic ? 'Disable public chat' : 'Enable public chat'}
+          title={isPublic ? 'Hide channel inbox sharing' : 'Show channel inbox sharing'}
         >
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${isPublic ? 'left-8' : 'left-1'}`} />
         </button>
@@ -638,11 +645,11 @@ function ChannelShareCard({
                 {copied === 'embed' ? 'Copied' : 'Copy'}
               </button>
             </div>
-            <p className="mt-2 text-xs text-gray-400">Paste this into any website, WordPress, Shopify, or landing page.</p>
+            <p className="mt-2 text-xs text-gray-400">This opens the channel inbox dashboard. The user must be logged in.</p>
           </div>
         </div>
       ) : (
-        <p className="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-400 dark:border-gray-800">Enable sharing to get the public chat link and embed code.</p>
+        <p className="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-400 dark:border-gray-800">Enable sharing to get the channel inbox link and embed code.</p>
       )}
     </div>
   );

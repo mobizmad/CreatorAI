@@ -421,6 +421,22 @@ class ChannelBroadcastResponse(ChannelBroadcastCreate):
         from_attributes = True
 
 
+class ChannelShareUpdate(BaseModel):
+    enabled: bool
+
+
+class ChannelShareResponse(BaseModel):
+    enabled: bool
+    token: Optional[str] = None
+    url: Optional[str] = None
+
+
+class ChannelShareConfigResponse(BaseModel):
+    agent_id: UUID
+    agent_name: str
+    agent_description: Optional[str] = None
+
+
 class ImprovementSuggestion(BaseModel):
     id: str
     category: str

@@ -45,6 +45,8 @@ class Agent(Base):
     search_provider = Column(String, default="duckduckgo")
     multi_agent_enabled = Column(Boolean, default=False)
     is_public = Column(Boolean, default=False)
+    channel_share_enabled = Column(Boolean, default=False)
+    channel_share_token = Column(String, nullable=True)
     category = Column(String, default="General")
     tavily_api_key = Column(String, nullable=True)
 

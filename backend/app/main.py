@@ -8,6 +8,7 @@ from app.db.database import init_db
 from app.api import auth, agents, knowledge, chat, corrections
 from app.api import auth, agents, knowledge, chat, corrections, api_keys, public_api,templates, tools, default_chat, ai_studio
 from app.api import integrations
+from app.api import channel_share
 from app.api.media_editor import router as media_editor_router
 from app.api.marketplace import router as marketplace_router
 from app.api import analytics
@@ -65,6 +66,7 @@ app.include_router(default_chat.router)
 app.include_router(ai_studio.router)
 app.include_router(media_editor_router)
 app.include_router(integrations.router)
+app.include_router(channel_share.router)
 
 
 @app.get("/")

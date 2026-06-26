@@ -58,3 +58,13 @@ def ensure_schema_updates():
             for column_name, column_type in integration_additions.items():
                 if column_name not in integration_columns:
                     conn.execute(text(f"ALTER TABLE agent_integrations ADD COLUMN {column_name} {column_type}"))
+
+        if "agents" in table_names:
+            agent_columns = {column["name"] for column in inspector.get_columns("agents")}
+            agent_additions = {
+                "channel_share_enabled": "BOOLEAN DEFAULT FALSE",
+                "channel_share_token": "VARCHAR",
+            }
+            for column_name, column_type in agent_additions.items():
+                if column_name not in agent_columns:
+                    conn.execute(text(f"ALTER TABLE agents ADD COLUMN {column_name} {column_type}"))
