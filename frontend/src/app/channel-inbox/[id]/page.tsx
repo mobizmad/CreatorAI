@@ -198,8 +198,8 @@ export default function SharedChannelInboxPage() {
   }
 
   return (
-    <div className="grid h-screen bg-white text-gray-900 lg:grid-cols-[360px_minmax(0,1fr)]">
-      <aside className="min-h-0 border-r border-gray-200 bg-white">
+    <div className="grid h-[100dvh] overflow-hidden bg-white text-gray-900 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <aside className="min-h-0 overflow-hidden border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Shared Channel Inbox</p>
           <h1 className="mt-1 text-lg font-bold">{config?.agent_name || 'Channel Inbox'}</h1>
@@ -224,7 +224,7 @@ export default function SharedChannelInboxPage() {
             </button>
           </div>
         </div>
-        <div className="h-[calc(100vh-121px)] overflow-y-auto">
+        <div className="h-[calc(100dvh-121px)] overflow-y-auto">
           {conversations.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
           ) : (
@@ -246,10 +246,10 @@ export default function SharedChannelInboxPage() {
         </div>
       </aside>
 
-      <main className="flex min-h-0 flex-col bg-white">
+      <main className="flex min-h-0 overflow-hidden flex-col bg-white">
         {selectedConversation ? (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
+            <div className="shrink-0 flex items-center justify-between gap-3 border-b border-gray-200 p-4">
               <div>
                 <h2 className="font-semibold">{customerLabel(selectedConversation)}</h2>
                 <p className="text-sm capitalize text-gray-500">
@@ -265,14 +265,14 @@ export default function SharedChannelInboxPage() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f0e8] p-4">
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-2.5">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-2.5">
                 {selectedConversation.messages.map((message) => {
                   const reference = messageReference(message, selectedConversation);
                   const outbound = message.direction !== 'inbound';
                   return (
                     <div
                       key={message.id}
-                      className={`w-fit max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm [overflow-wrap:anywhere] sm:max-w-[68%] ${outbound ? 'ml-auto rounded-br-md bg-primary-500 text-white' : 'rounded-bl-md bg-white text-gray-900'}`}
+                      className={`w-fit max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm [overflow-wrap:anywhere] sm:max-w-[460px] ${outbound ? 'ml-auto rounded-br-md bg-primary-500 text-white' : 'rounded-bl-md bg-white text-gray-900'}`}
                     >
                       {reference && (
                         <p className={`mb-1 border-l-2 pl-2 text-[11px] font-semibold leading-4 ${outbound ? 'border-white/50 text-white/80' : 'border-primary-400 text-primary-700'}`}>
@@ -288,9 +288,9 @@ export default function SharedChannelInboxPage() {
                 })}
               </div>
             </div>
-            <div className="border-t border-gray-200 p-4">
+            <div className="shrink-0 border-t border-gray-200 p-4">
               {sendError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{sendError}</div>}
-              <div className="mx-auto flex w-full max-w-4xl gap-2">
+              <div className="mx-auto flex w-full max-w-3xl gap-2">
                 <input
                   value={replyText}
                   onFocus={pauseConversationForHuman}

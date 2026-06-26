@@ -388,12 +388,12 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className={inboxFullscreen ? 'fixed inset-0 z-[9999] grid h-[100dvh] w-screen gap-0 overflow-hidden bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
-              <div className={`overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
+            <div className={inboxFullscreen ? 'fixed inset-0 z-[9999] grid h-[100dvh] w-screen gap-0 overflow-hidden bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid h-[calc(100vh-210px)] min-h-0 overflow-hidden gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
+              <div className={`min-h-0 overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
                 </div>
-                <div className={inboxFullscreen ? 'max-h-[calc(100vh-84px)] overflow-y-auto' : 'max-h-[calc(100vh-285px)] overflow-y-auto'}>
+                <div className={inboxFullscreen ? 'h-[calc(100dvh-57px)] overflow-y-auto' : 'h-[calc(100vh-267px)] overflow-y-auto'}>
                   {conversations.length === 0 ? (
                     <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
                   ) : (
@@ -415,10 +415,10 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                 </div>
               </div>
 
-              <div className={`bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'shadow-none' : 'rounded-lg'}`}>
+              <div className={`min-h-0 overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'shadow-none' : 'rounded-lg'}`}>
                 {selectedConversation ? (
-                  <div className={inboxFullscreen ? 'flex h-[100dvh] min-h-0 flex-col overflow-hidden' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
-                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
+                  <div className={inboxFullscreen ? 'flex h-[100dvh] min-h-0 flex-col overflow-hidden' : 'flex h-[calc(100vh-210px)] min-h-0 flex-col overflow-hidden'}>
+                    <div className="shrink-0 flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
                         <p className="text-sm capitalize text-gray-500">
@@ -444,14 +444,14 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                       </div>
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f0e8] p-4 dark:bg-gray-900">
-                      <div className="mx-auto flex w-full max-w-4xl flex-col gap-2.5">
+                      <div className="mx-auto flex w-full max-w-3xl flex-col gap-2.5">
                         {selectedConversation.messages.map((message) => {
                           const reference = messageReference(message, selectedConversation);
                           const outbound = message.direction !== 'inbound';
                           return (
                             <div
                               key={message.id}
-                              className={`w-fit max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm [overflow-wrap:anywhere] sm:max-w-[68%] ${outbound ? 'ml-auto rounded-br-md bg-primary-500 text-white' : 'rounded-bl-md bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100'}`}
+                              className={`w-fit max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm [overflow-wrap:anywhere] sm:max-w-[460px] ${outbound ? 'ml-auto rounded-br-md bg-primary-500 text-white' : 'rounded-bl-md bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100'}`}
                             >
                               {reference && (
                                 <p className={`mb-1 border-l-2 pl-2 text-[11px] font-semibold leading-4 ${outbound ? 'border-white/50 text-white/80' : 'border-primary-400 text-primary-700 dark:text-primary-300'}`}>
@@ -467,13 +467,13 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                         })}
                       </div>
                     </div>
-                    <div className="border-t border-gray-200 p-4 dark:border-gray-800">
+                    <div className="shrink-0 border-t border-gray-200 p-4 dark:border-gray-800">
                       {sendError && (
                         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
                           {sendError}
                         </div>
                       )}
-                      <div className="mx-auto flex w-full max-w-4xl gap-2">
+                      <div className="mx-auto flex w-full max-w-3xl gap-2">
                         <input
                           value={replyText}
                           onFocus={pauseConversationForHuman}
