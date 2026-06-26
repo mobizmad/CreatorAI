@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCircle, Copy, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
@@ -111,11 +111,16 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [isSharingSaving, setIsSharingSaving] = useState(false);
   const [shareCopied, setShareCopied] = useState<'link' | 'embed' | null>(null);
   const [channelShareUrl, setChannelShareUrl] = useState('');
+  const selectedIdRef = useRef('');
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
     [conversations, selectedId]
   );
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const loadConversations = useCallback(async ({ showError = false } = {}) => {
     try {
@@ -124,7 +129,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       if (!response.ok) throw new Error('Could not refresh messages.');
       const conversationData = await response.json();
       setConversations(conversationData);
-      if (!selectedId && conversationData[0]) setSelectedId(conversationData[0].id);
+      if (!selectedIdRef.current && conversationData[0]) setSelectedId(conversationData[0].id);
       if (showError) setLoadError('');
     } catch (error) {
       console.error('Failed to refresh channel messages:', error);
@@ -132,7 +137,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
         setLoadError(error instanceof Error ? error.message : 'Could not refresh messages.');
       }
     }
-  }, [agentId, provider, selectedId]);
+  }, [agentId, provider]);
 
   const loadAll = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
@@ -153,7 +158,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       setLeads(leadRes.ok ? await leadRes.json() : []);
       setBroadcasts(broadcastRes.ok ? await broadcastRes.json() : []);
       setIntegrations(integrationRes.ok ? await integrationRes.json() : []);
-      if (!selectedId && conversationData[0]) setSelectedId(conversationData[0].id);
+      if (!selectedIdRef.current && conversationData[0]) setSelectedId(conversationData[0].id);
     } catch (error) {
       console.error('Failed to load channel data:', error);
       if (showSpinner) {
@@ -162,7 +167,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }, [agentId, provider, selectedId]);
+  }, [agentId, provider]);
 
   const loadShareStatus = useCallback(async () => {
     try {
@@ -183,7 +188,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (activeView !== 'inbox') return;
-    const interval = window.setInterval(() => loadConversations(), 5000);
+    const interval = window.setInterval(() => loadConversations(), 2500);
     return () => window.clearInterval(interval);
   }, [activeView, loadConversations]);
 
@@ -205,12 +210,15 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   }, [inboxFullscreen]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
+    setConversations((current) =>
+      current.map((item) => (item.id === conversation.id ? { ...item, ...patch } : item))
+    );
     await fetch(`${API}/agents/${agentId}/channel-conversations/${conversation.id}`, {
       method: 'PATCH',
       headers: authHeaders(),
       body: JSON.stringify(patch),
     });
-    await loadAll();
+    await loadConversations();
   };
 
   const pauseConversationForHuman = async () => {
@@ -241,8 +249,24 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
         const error = await response.json().catch(() => null);
         throw new Error(error?.detail || 'Message was not delivered.');
       }
+      const deliveredMessage = await response.json().catch(() => null);
+      if (deliveredMessage) {
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === selectedConversation.id
+              ? {
+                  ...conversation,
+                  human_takeover: true,
+                  last_message_preview: replyText.trim(),
+                  last_message_at: deliveredMessage.created_at || new Date().toISOString(),
+                  messages: [...conversation.messages, deliveredMessage],
+                }
+              : conversation
+          )
+        );
+      }
       setReplyText('');
-      await loadAll();
+      await loadConversations();
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'Message was not delivered.');
     } finally {
@@ -388,7 +412,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className={inboxFullscreen ? 'fixed inset-0 z-[9999] grid h-[100dvh] w-screen gap-0 overflow-hidden bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid h-[calc(100vh-210px)] min-h-0 overflow-hidden gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
+            <div className={inboxFullscreen ? 'fixed -inset-px z-[2147483647] m-0 grid h-[calc(100dvh+2px)] w-[calc(100vw+2px)] gap-0 overflow-hidden rounded-none bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid h-[calc(100vh-210px)] min-h-0 overflow-hidden gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
               <div className={`min-h-0 overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
@@ -400,7 +424,10 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                     conversations.map((conversation) => (
                       <button
                         key={conversation.id}
-                        onClick={() => setSelectedId(conversation.id)}
+                        onClick={() => {
+                          setSelectedId(conversation.id);
+                          setSendError('');
+                        }}
                         className={`w-full border-b border-gray-100 p-4 text-left dark:border-gray-900 ${selectedConversation?.id === conversation.id ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-900'}`}
                       >
                         <div className="flex items-center gap-2">

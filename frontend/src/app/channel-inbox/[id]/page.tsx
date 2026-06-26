@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, PauseCircle, PlayCircle, RefreshCw, Send } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 
@@ -72,11 +72,16 @@ export default function SharedChannelInboxPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [sendError, setSendError] = useState('');
+  const selectedIdRef = useRef('');
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
     [conversations, selectedId]
   );
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const shareQuery = useMemo(() => {
     const query = new URLSearchParams({ token });
@@ -91,13 +96,13 @@ export default function SharedChannelInboxPage() {
       if (!response.ok) throw new Error('Could not load shared inbox.');
       const data = await response.json();
       setConversations(data);
-      if (!selectedId && data[0]) setSelectedId(data[0].id);
+      if (!selectedIdRef.current && data[0]) setSelectedId(data[0].id);
       if (showError) setError('');
     } catch (err) {
       console.error('Failed to refresh shared channel inbox:', err);
       if (showError) setError(err instanceof Error ? err.message : 'Could not load shared inbox.');
     }
-  }, [agentId, selectedId, shareQuery, token]);
+  }, [agentId, shareQuery, token]);
 
   const loadAll = useCallback(async () => {
     if (!agentId || !token) {
@@ -116,31 +121,34 @@ export default function SharedChannelInboxPage() {
       setConfig(await configResponse.json());
       const data = await conversationResponse.json();
       setConversations(data);
-      if (!selectedId && data[0]) setSelectedId(data[0].id);
+      if (!selectedIdRef.current && data[0]) setSelectedId(data[0].id);
     } catch (err) {
       console.error('Failed to load shared channel inbox:', err);
       setError(err instanceof Error ? err.message : 'Could not load shared inbox.');
     } finally {
       setLoading(false);
     }
-  }, [agentId, selectedId, shareQuery, token]);
+  }, [agentId, shareQuery, token]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => loadConversations(), 5000);
+    const interval = window.setInterval(() => loadConversations(), 2500);
     return () => window.clearInterval(interval);
   }, [loadConversations]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
+    setConversations((current) =>
+      current.map((item) => (item.id === conversation.id ? { ...item, ...patch } : item))
+    );
     await fetch(`${API}/channel-share/${agentId}/conversations/${conversation.id}?token=${encodeURIComponent(token)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
-    await loadConversations({ showError: true });
+    await loadConversations();
   };
 
   const pauseConversationForHuman = async () => {
@@ -170,6 +178,22 @@ export default function SharedChannelInboxPage() {
       if (!response.ok) {
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || 'Message was not delivered.');
+      }
+      const deliveredMessage = await response.json().catch(() => null);
+      if (deliveredMessage) {
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === selectedConversation.id
+              ? {
+                  ...conversation,
+                  human_takeover: true,
+                  last_message_preview: replyText.trim(),
+                  last_message_at: deliveredMessage.created_at || new Date().toISOString(),
+                  messages: [...conversation.messages, deliveredMessage],
+                }
+              : conversation
+          )
+        );
       }
       setReplyText('');
       await loadConversations({ showError: true });
@@ -231,7 +255,10 @@ export default function SharedChannelInboxPage() {
             conversations.map((conversation) => (
               <button
                 key={conversation.id}
-                onClick={() => setSelectedId(conversation.id)}
+                onClick={() => {
+                  setSelectedId(conversation.id);
+                  setSendError('');
+                }}
                 className={`w-full border-b border-gray-100 p-4 text-left ${selectedConversation?.id === conversation.id ? 'bg-primary-50' : 'hover:bg-gray-50'}`}
               >
                 <div className="flex items-center gap-2">
