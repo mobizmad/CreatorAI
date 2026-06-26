@@ -44,8 +44,7 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
     if (pathname.includes('/agents') || pathname.includes('/templates')) activeView = 'agents';
     else if (pathname.includes('/widget')) activeView = 'marketplace';
   }
-  // Note: dashboard handles its own activeView state internally if it doesn't use URL params,
-  // but for the sake of highlighting in the playground, this works.
+  // Note: dashboard handles its own activeView state internally if it doesn't use URL params.
 
   useEffect(() => {
     loadAgents();
@@ -192,9 +191,9 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
             {agents.slice(0, 8).map((agent) => (
               <button
                 key={agent.id}
-                onClick={() => router.push(`/agents/${agent.id}/playground`)}
+                onClick={() => router.push(`/dashboard?view=playground&agent=${agent.id}`)}
                 className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  pathname.includes(agent.id)
+                  activeViewOverride === 'playground' && typeof window !== 'undefined' && window.location.search.includes(agent.id)
                     ? 'bg-white/10 text-white'
                     : 'text-gray-300 hover:bg-white/10 hover:text-white'
                 }`}
