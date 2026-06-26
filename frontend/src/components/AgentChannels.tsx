@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Bot, Clock, Inbox, KeyRound, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, UserPlus } from 'lucide-react';
+import { Bell, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -76,7 +76,7 @@ const customerLabel = (conversation: ChannelConversation) => {
 };
 
 export default function AgentChannels({ agentId }: { agentId: string }) {
-  const [activeView, setActiveView] = useState<'inbox' | 'credentials' | 'rules' | 'leads' | 'broadcast'>('inbox');
+  const [activeView, setActiveView] = useState<'inbox' | 'leads' | 'settings'>('inbox');
   const [provider, setProvider] = useState<Provider>('all');
   const [conversations, setConversations] = useState<ChannelConversation[]>([]);
   const [leads, setLeads] = useState<ChannelLead[]>([]);
@@ -243,46 +243,53 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   const tabs = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
-    { id: 'credentials', label: 'Credentials', icon: KeyRound },
-    { id: 'rules', label: 'Rules', icon: Clock },
     { id: 'leads', label: 'Leads', icon: UserPlus },
-    { id: 'broadcast', label: 'Broadcast', icon: Megaphone },
   ] as const;
 
   return (
     <div className="space-y-5">
       <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-950">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Channel Control Center</h2>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage external messages, rules, leads, and broadcasts for this agent.</p>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage external messages, leads, and channel settings for this agent.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {providers.map((item) => (
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="flex flex-wrap gap-2">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveView(tab.id)}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeView === tab.id ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
               <button
-                key={item}
-                onClick={() => setProvider(item)}
-                className={`rounded-lg px-3 py-2 text-sm font-medium capitalize ${provider === item ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}
+                onClick={() => setActiveView(activeView === 'settings' ? 'inbox' : 'settings')}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeView === 'settings' ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-950' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}
               >
-                {item}
+                <Settings className="h-4 w-4" />
+                {activeView === 'settings' ? 'Back to Inbox' : 'Settings'}
               </button>
-            ))}
+            </div>
+            <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 lg:block hidden" />
+            <div className="flex flex-wrap gap-2">
+              {providers.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setProvider(item)}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium capitalize ${provider === item ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-950' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'}`}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="mt-5 grid gap-2 sm:grid-cols-5">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveView(tab.id)}
-                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${activeView === tab.id ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-900'}`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -385,12 +392,9 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
             </div>
           )}
 
-          {activeView === 'credentials' && (
-            <AgentIntegrations agentId={agentId} />
-          )}
-
-          {activeView === 'rules' && (
+          {activeView === 'settings' && (
             <div className="grid gap-5">
+              <AgentIntegrations agentId={agentId} />
               {integrations.length === 0 ? (
                 <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow dark:bg-gray-950">Connect a channel first in Credentials.</div>
               ) : (
@@ -404,6 +408,13 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                   />
                 ))
               )}
+              <BroadcastSettings
+                broadcasts={broadcasts}
+                broadcastDraft={broadcastDraft}
+                setBroadcastDraft={setBroadcastDraft}
+                createBroadcast={createBroadcast}
+                saving={saving}
+              />
             </div>
           )}
 
@@ -447,41 +458,65 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
             </div>
           )}
 
-          {activeView === 'broadcast' && (
-            <div className="grid gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
-              <div className="rounded-lg bg-white p-5 shadow dark:bg-gray-950">
-                <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">New Broadcast Draft</h3>
-                <div className="space-y-3">
-                  <input value={broadcastDraft.provider} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, provider: event.target.value })} placeholder="provider" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
-                  <input value={broadcastDraft.title} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, title: event.target.value })} placeholder="title" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
-                  <textarea value={broadcastDraft.message} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, message: event.target.value })} placeholder="message" rows={5} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
-                  <button onClick={createBroadcast} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
-                    <Bell className="h-4 w-4" />
-                    Save Draft
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-lg bg-white shadow dark:bg-gray-950">
-                <div className="border-b border-gray-200 p-4 dark:border-gray-800">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Broadcast History</h3>
-                </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-900">
-                  {broadcasts.length === 0 ? <p className="p-4 text-sm text-gray-500">No broadcast drafts yet.</p> : broadcasts.map((broadcast) => (
-                    <div key={broadcast.id} className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900 dark:text-white">{broadcast.title || 'Untitled broadcast'}</span>
-                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600 dark:bg-gray-800 dark:text-gray-300">{broadcast.provider}</span>
-                        <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{broadcast.status}</span>
-                      </div>
-                      <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{broadcast.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
+    </div>
+  );
+}
+
+function BroadcastSettings({
+  broadcasts,
+  broadcastDraft,
+  setBroadcastDraft,
+  createBroadcast,
+  saving,
+}: {
+  broadcasts: ChannelBroadcast[];
+  broadcastDraft: { provider: string; title: string; message: string; target: string; status: string };
+  setBroadcastDraft: (draft: { provider: string; title: string; message: string; target: string; status: string }) => void;
+  createBroadcast: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="rounded-lg bg-white p-5 shadow dark:bg-gray-950">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
+            <Megaphone className="h-4 w-4" />
+            Broadcast Drafts
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">Save announcement drafts here. Bulk sending can be enabled later.</p>
+        </div>
+        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">In dev</span>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <input value={broadcastDraft.provider} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, provider: event.target.value })} placeholder="provider" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+          <input value={broadcastDraft.title} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, title: event.target.value })} placeholder="title" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+          <textarea value={broadcastDraft.message} onChange={(event) => setBroadcastDraft({ ...broadcastDraft, message: event.target.value })} placeholder="message" rows={5} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white" />
+          <button onClick={createBroadcast} disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
+            <Bell className="h-4 w-4" />
+            Save Draft
+          </button>
+        </div>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-800">
+          <div className="border-b border-gray-200 p-4 dark:border-gray-800">
+            <h4 className="font-semibold text-gray-900 dark:text-white">Saved Drafts</h4>
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-900">
+            {broadcasts.length === 0 ? <p className="p-4 text-sm text-gray-500">No broadcast drafts yet.</p> : broadcasts.map((broadcast) => (
+              <div key={broadcast.id} className="p-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900 dark:text-white">{broadcast.title || 'Untitled broadcast'}</span>
+                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600 dark:bg-gray-800 dark:text-gray-300">{broadcast.provider}</span>
+                  <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{broadcast.status}</span>
+                </div>
+                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{broadcast.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
