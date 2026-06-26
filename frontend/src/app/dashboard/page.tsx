@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Bot,
   ChevronRight,
+  Key,
   Loader2,
   LogOut,
   MessageSquare,
   Moon,
   Plus,
   Search,
+  Settings,
   Star,
   Store,
   Sun,
@@ -203,6 +205,7 @@ export default function Dashboard() {
         {activeView === 'playground' && (
           <DashboardPlaygroundView
             agentId={selectedPlaygroundAgentId || agents[0]?.id || ''}
+            agent={agents.find((agent) => agent.id === (selectedPlaygroundAgentId || agents[0]?.id))}
             hasAgents={agents.length > 0}
             onCreate={() => router.push('/templates')}
           />
@@ -214,13 +217,17 @@ export default function Dashboard() {
 
 function DashboardPlaygroundView({
   agentId,
+  agent,
   hasAgents,
   onCreate,
 }: {
   agentId: string;
+  agent?: Agent;
   hasAgents: boolean;
   onCreate: () => void;
 }) {
+  const router = useRouter();
+
   if (!hasAgents || !agentId) {
     return (
       <div className="flex h-full items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -241,8 +248,43 @@ function DashboardPlaygroundView({
   }
 
   return (
-    <div className="h-full bg-white dark:bg-gray-950">
-      <ChatInterface agentId={agentId} />
+    <div className="flex h-full flex-col bg-white dark:bg-gray-950">
+      <header className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-950 sm:px-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push('/dashboard?view=agents')}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            title="Back to agents"
+          >
+            <ChevronRight className="h-5 w-5 rotate-180" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold text-gray-900 dark:text-white">{agent?.name || 'Agent'}</h1>
+            <p className="truncate text-sm text-gray-600 dark:text-gray-400">
+              {[agent?.llm_provider, agent?.llm_model].filter(Boolean).join(' • ')}
+            </p>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/agents/${agentId}/playground`)}
+              className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
+            <button
+              onClick={() => router.push(`/agents/${agentId}/api`)}
+              className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+            >
+              <Key className="h-4 w-4" />
+              API Integration
+            </button>
+          </div>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1">
+        <ChatInterface agentId={agentId} />
+      </div>
     </div>
   );
 }
