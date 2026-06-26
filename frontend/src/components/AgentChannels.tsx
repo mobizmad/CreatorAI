@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, UserPlus } from 'lucide-react';
+import { Bell, CheckCircle, Copy, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -91,6 +91,9 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
   const [sendError, setSendError] = useState('');
   const [saving, setSaving] = useState(false);
   const [inboxFullscreen, setInboxFullscreen] = useState(false);
+  const [isPublicChat, setIsPublicChat] = useState(false);
+  const [isSharingSaving, setIsSharingSaving] = useState(false);
+  const [shareCopied, setShareCopied] = useState<'link' | 'embed' | null>(null);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
@@ -144,9 +147,21 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     }
   }, [agentId, provider, selectedId]);
 
+  const loadShareStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${API}/agents/${agentId}`, { headers: authHeaders() });
+      if (!response.ok) return;
+      const data = await response.json();
+      setIsPublicChat(Boolean(data.is_public));
+    } catch (error) {
+      console.error('Failed to load channel share status:', error);
+    }
+  }, [agentId]);
+
   useEffect(() => {
     loadAll();
-  }, [loadAll]);
+    loadShareStatus();
+  }, [loadAll, loadShareStatus]);
 
   useEffect(() => {
     if (activeView !== 'inbox') return;
@@ -241,6 +256,30 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     }
   };
 
+  const togglePublicChat = async (nextValue: boolean) => {
+    setIsSharingSaving(true);
+    try {
+      const response = await fetch(`${API}/agents/${agentId}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ is_public: nextValue }),
+      });
+      if (!response.ok) throw new Error('Could not update public chat sharing.');
+      setIsPublicChat(nextValue);
+    } catch (error) {
+      console.error('Failed to update public chat sharing:', error);
+      alert('Could not update public chat sharing.');
+    } finally {
+      setIsSharingSaving(false);
+    }
+  };
+
+  const copyShareText = async (text: string, type: 'link' | 'embed') => {
+    await navigator.clipboard.writeText(text);
+    setShareCopied(type);
+    window.setTimeout(() => setShareCopied((current) => (current === type ? null : current)), 1600);
+  };
+
   const tabs = [
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'leads', label: 'Leads', icon: UserPlus },
@@ -307,8 +346,8 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className={inboxFullscreen ? 'fixed inset-0 z-50 grid gap-0 bg-gray-50 p-3 dark:bg-gray-900 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
-              <div className={`overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'rounded-l-lg border-r border-gray-200 dark:border-gray-800' : 'rounded-lg'}`}>
+            <div className={inboxFullscreen ? 'fixed inset-0 z-50 grid gap-0 bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
+              <div className={`overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
                 </div>
@@ -334,9 +373,9 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                 </div>
               </div>
 
-              <div className={`bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'rounded-r-lg' : 'rounded-lg'}`}>
+              <div className={`bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'shadow-none' : 'rounded-lg'}`}>
                 {selectedConversation ? (
-                  <div className={inboxFullscreen ? 'flex h-[calc(100vh-24px)] flex-col' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
+                  <div className={inboxFullscreen ? 'flex h-screen flex-col' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
@@ -396,6 +435,14 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
           {activeView === 'settings' && (
             <div className="grid gap-5">
+              <ChannelShareCard
+                agentId={agentId}
+                isPublic={isPublicChat}
+                saving={isSharingSaving}
+                copied={shareCopied}
+                onToggle={togglePublicChat}
+                onCopy={copyShareText}
+              />
               <AgentIntegrations agentId={agentId} />
               {integrations.length === 0 ? (
                 <div className="rounded-lg bg-white p-6 text-sm text-gray-500 shadow dark:bg-gray-950">Connect a channel first in Settings.</div>
@@ -519,6 +566,84 @@ function BroadcastSettings({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChannelShareCard({
+  agentId,
+  isPublic,
+  saving,
+  copied,
+  onToggle,
+  onCopy,
+}: {
+  agentId: string;
+  isPublic: boolean;
+  saving: boolean;
+  copied: 'link' | 'embed' | null;
+  onToggle: (nextValue: boolean) => void;
+  onCopy: (text: string, type: 'link' | 'embed') => void;
+}) {
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com';
+  const chatUrl = `${baseUrl}/widget/${agentId}`;
+  const embedCode = `<iframe\n  src="${chatUrl}"\n  width="400"\n  height="600"\n  style="border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 4px 6px rgba(0,0,0,0.07);"\n  frameborder="0"\n></iframe>`;
+
+  return (
+    <div className="rounded-lg bg-white p-5 shadow dark:bg-gray-950">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="font-semibold text-gray-900 dark:text-white">Share Chat</h3>
+          <p className="mt-1 text-sm text-gray-500">Share this agent chat as a public widget link or embed.</p>
+        </div>
+        <button
+          onClick={() => onToggle(!isPublic)}
+          disabled={saving}
+          className={`relative h-7 w-14 rounded-full transition-colors disabled:opacity-60 ${isPublic ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-700'}`}
+          title={isPublic ? 'Disable public chat' : 'Enable public chat'}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${isPublic ? 'left-8' : 'left-1'}`} />
+        </button>
+      </div>
+
+      {isPublic ? (
+        <div className="mt-5 space-y-4 border-t border-gray-200 pt-5 dark:border-gray-800">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Share Link</p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={chatUrl}
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+              />
+              <button
+                onClick={() => onCopy(chatUrl, 'link')}
+                className="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+              >
+                {copied === 'link' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied === 'link' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Embed Code</p>
+            <div className="relative rounded-lg bg-gray-950 p-4">
+              <pre className="overflow-x-auto whitespace-pre-wrap pr-16 text-xs leading-5 text-green-400">{embedCode}</pre>
+              <button
+                onClick={() => onCopy(embedCode, 'embed')}
+                className="absolute right-3 top-3 flex items-center gap-1 rounded bg-gray-700 px-2 py-1 text-xs text-gray-100 hover:bg-gray-600"
+              >
+                {copied === 'embed' ? <CheckCircle className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {copied === 'embed' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-400">Paste this into any website, WordPress, Shopify, or landing page.</p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-400 dark:border-gray-800">Enable sharing to get the public chat link and embed code.</p>
+      )}
     </div>
   );
 }
