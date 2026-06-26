@@ -191,6 +191,20 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     await loadAll();
   };
 
+  const pauseConversationForHuman = async () => {
+    if (!selectedConversation || selectedConversation.human_takeover) return;
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === selectedConversation.id ? { ...conversation, human_takeover: true } : conversation
+      )
+    );
+    await fetch(`${API}/agents/${agentId}/channel-conversations/${selectedConversation.id}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ human_takeover: true }),
+    });
+  };
+
   const sendManualReply = async () => {
     if (!selectedConversation || !replyText.trim()) return;
     setSaving(true);
@@ -427,6 +441,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                       <div className="flex gap-2">
                         <input
                           value={replyText}
+                          onFocus={pauseConversationForHuman}
                           onChange={(event) => setReplyText(event.target.value)}
                           placeholder="Manual reply to customer..."
                           className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"

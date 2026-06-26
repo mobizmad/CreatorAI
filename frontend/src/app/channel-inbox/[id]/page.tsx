@@ -129,6 +129,20 @@ export default function SharedChannelInboxPage() {
     await loadConversations({ showError: true });
   };
 
+  const pauseConversationForHuman = async () => {
+    if (!selectedConversation || selectedConversation.human_takeover) return;
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === selectedConversation.id ? { ...conversation, human_takeover: true } : conversation
+      )
+    );
+    await fetch(`${API}/channel-share/${agentId}/conversations/${selectedConversation.id}?token=${encodeURIComponent(token)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ human_takeover: true }),
+    });
+  };
+
   const sendManualReply = async () => {
     if (!selectedConversation || !replyText.trim()) return;
     setSaving(true);
@@ -252,6 +266,7 @@ export default function SharedChannelInboxPage() {
               <div className="flex gap-2">
                 <input
                   value={replyText}
+                  onFocus={pauseConversationForHuman}
                   onChange={(event) => setReplyText(event.target.value)}
                   placeholder="Manual reply to customer..."
                   className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
