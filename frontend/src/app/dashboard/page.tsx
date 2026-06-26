@@ -206,7 +206,7 @@ function ChannelsView({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-[1800px] px-4 py-4 lg:px-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Channels</h1>

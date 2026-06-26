@@ -96,6 +96,23 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
     [conversations, selectedId]
   );
 
+  const loadConversations = useCallback(async ({ showError = false } = {}) => {
+    try {
+      const query = provider === 'all' ? '' : `?provider=${provider}`;
+      const response = await fetch(`${API}/agents/${agentId}/channel-conversations${query}`, { headers: authHeaders() });
+      if (!response.ok) throw new Error('Could not refresh messages.');
+      const conversationData = await response.json();
+      setConversations(conversationData);
+      if (!selectedId && conversationData[0]) setSelectedId(conversationData[0].id);
+      if (showError) setLoadError('');
+    } catch (error) {
+      console.error('Failed to refresh channel messages:', error);
+      if (showError) {
+        setLoadError(error instanceof Error ? error.message : 'Could not refresh messages.');
+      }
+    }
+  }, [agentId, provider, selectedId]);
+
   const loadAll = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true);
     setLoadError('');
@@ -118,7 +135,9 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       if (!selectedId && conversationData[0]) setSelectedId(conversationData[0].id);
     } catch (error) {
       console.error('Failed to load channel data:', error);
-      setLoadError(error instanceof Error ? error.message : 'Could not load channel data.');
+      if (showSpinner) {
+        setLoadError(error instanceof Error ? error.message : 'Could not load channel data.');
+      }
     } finally {
       if (showSpinner) setLoading(false);
     }
@@ -126,9 +145,13 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     loadAll();
-    const interval = window.setInterval(() => loadAll(false), 5000);
-    return () => window.clearInterval(interval);
   }, [loadAll]);
+
+  useEffect(() => {
+    if (activeView !== 'inbox') return;
+    const interval = window.setInterval(() => loadConversations(), 5000);
+    return () => window.clearInterval(interval);
+  }, [activeView, loadConversations]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
     await fetch(`${API}/agents/${agentId}/channel-conversations/${conversation.id}`, {
@@ -218,7 +241,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-950">
+      <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-950">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Channel Control Center</h2>
@@ -265,12 +288,12 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className="grid min-h-[520px] gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
               <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-950">
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
                   <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
                 </div>
-                <div className="max-h-[620px] overflow-y-auto">
+                <div className="max-h-[calc(100vh-285px)] overflow-y-auto">
                   {conversations.length === 0 ? (
                     <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
                   ) : (
@@ -294,7 +317,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
               <div className="rounded-lg bg-white shadow dark:bg-gray-950">
                 {selectedConversation ? (
-                  <div className="flex h-full min-h-[520px] flex-col">
+                  <div className="flex h-full min-h-[calc(100vh-210px)] flex-col">
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>

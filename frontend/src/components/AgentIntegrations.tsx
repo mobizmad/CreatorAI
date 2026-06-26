@@ -250,6 +250,7 @@ export default function AgentIntegrations({ agentId }: { agentId: string }) {
             {PROVIDERS.map((provider) => {
               const Icon = provider.icon;
               const connected = integrations.find((item) => item.provider === provider.id);
+              const isActive = drafts[provider.id].is_active;
               return (
                 <button
                   key={provider.id}
@@ -263,10 +264,10 @@ export default function AgentIntegrations({ agentId }: { agentId: string }) {
                   <span className="flex items-center gap-2">
                     <Icon className="h-4 w-4" />
                     <span className="font-medium">{provider.name}</span>
-                    {connected?.is_active && <span className="ml-auto h-2 w-2 rounded-full bg-green-500" />}
+                    {isActive && <span className="ml-auto h-2 w-2 rounded-full bg-green-500" />}
                   </span>
                   <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                    {connected ? 'Configured' : 'Not connected'}
+                    {connected ? (isActive ? 'Active' : 'Inactive') : 'Not connected'}
                   </span>
                 </button>
               );
