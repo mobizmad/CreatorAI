@@ -20,12 +20,13 @@ import AIStudio from '@/components/AIStudio';
 import MediaEditor from '@/components/MediaEditor';
 import AgentCard from '@/components/AgentCard';
 import AgentChannels from '@/components/AgentChannels';
+import ChatInterface from '@/components/ChatInterface';
 import DefaultChatInterface from '@/components/DefaultChatInterface';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { agentAPI, authAPI } from '@/lib/api';
 import type { Agent, User } from '@/lib/types';
 
-type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor';
+type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground';
 
 interface MarketplaceAgent {
   id: string;
@@ -54,6 +55,7 @@ export default function Dashboard() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [selectedChannelAgentId, setSelectedChannelAgentId] = useState('');
+  const [selectedPlaygroundAgentId, setSelectedPlaygroundAgentId] = useState('');
 
   useEffect(() => {
     loadAgents();
@@ -64,7 +66,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const view = searchParams.get('view') as DashboardView | null;
-    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor'].includes(view)) {
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground'].includes(view)) {
       setActiveView(view);
     }
   }, [searchParams]);
@@ -72,13 +74,17 @@ export default function Dashboard() {
   useEffect(() => {
     const agentId = searchParams.get('agent');
     if (agentId) setSelectedChannelAgentId(agentId);
+    if (agentId) setSelectedPlaygroundAgentId(agentId);
   }, [searchParams]);
 
   useEffect(() => {
     if (!selectedChannelAgentId && agents[0]) {
       setSelectedChannelAgentId(agents[0].id);
     }
-  }, [agents, selectedChannelAgentId]);
+    if (!selectedPlaygroundAgentId && agents[0]) {
+      setSelectedPlaygroundAgentId(agents[0].id);
+    }
+  }, [agents, selectedChannelAgentId, selectedPlaygroundAgentId]);
 
   useEffect(() => {
     if (activeView !== 'marketplace') return;
@@ -160,7 +166,15 @@ export default function Dashboard() {
       <main className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900">
         {activeView === 'chat' && <DefaultChatInterface />}
         {activeView === 'agents' && (
-          <AgentsView agents={agents} onDelete={handleDeleteAgent} onCreate={() => router.push('/templates')} />
+          <AgentsView
+            agents={agents}
+            onDelete={handleDeleteAgent}
+            onCreate={() => router.push('/templates')}
+            onOpen={(agentId) => {
+              setSelectedPlaygroundAgentId(agentId);
+              router.push(`/dashboard?view=playground&agent=${agentId}`);
+            }}
+          />
         )}
         {activeView === 'marketplace' && (
           <MarketplaceView
@@ -186,7 +200,49 @@ export default function Dashboard() {
           />
         )}
         {activeView === 'media-editor' && <MediaEditor />}
+        {activeView === 'playground' && (
+          <DashboardPlaygroundView
+            agentId={selectedPlaygroundAgentId || agents[0]?.id || ''}
+            hasAgents={agents.length > 0}
+            onCreate={() => router.push('/templates')}
+          />
+        )}
       </main>
+    </div>
+  );
+}
+
+function DashboardPlaygroundView({
+  agentId,
+  hasAgents,
+  onCreate,
+}: {
+  agentId: string;
+  hasAgents: boolean;
+  onCreate: () => void;
+}) {
+  if (!hasAgents || !agentId) {
+    return (
+      <div className="flex h-full items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white px-10 py-12 text-center dark:border-gray-800 dark:bg-gray-950">
+          <Bot className="mx-auto h-12 w-12 text-gray-300" />
+          <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">No agents yet</h2>
+          <p className="mt-1 text-sm text-gray-500">Create an agent first, then open the playground.</p>
+          <button
+            onClick={onCreate}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-600"
+          >
+            <Plus className="w-4 h-4" />
+            Create Agent
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full bg-white dark:bg-gray-950">
+      <ChatInterface agentId={agentId} />
     </div>
   );
 }
@@ -255,10 +311,12 @@ function AgentsView({
   agents,
   onDelete,
   onCreate,
+  onOpen,
 }: {
   agents: Agent[];
   onDelete: (agentId: string) => void;
   onCreate: () => void;
+  onOpen: (agentId: string) => void;
 }) {
   return (
     <div className="h-full overflow-y-auto">
@@ -293,7 +351,7 @@ function AgentsView({
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} onDelete={onDelete} />
+              <AgentCard key={agent.id} agent={agent} onDelete={onDelete} onOpen={onOpen} />
             ))}
           </div>
         )}
