@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, PauseCircle, PlayCircle, RefreshCw, Send } from 'lucide-react';
+import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Clock, Hash, Loader2, MessageSquare, PauseCircle, PlayCircle, RefreshCw, Send, Tag } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -19,6 +19,7 @@ interface ChannelConversation {
   id: string;
   provider: Provider;
   external_user_id: string;
+  external_chat_id?: string;
   display_name?: string;
   conversation_type?: string;
   status: string;
@@ -42,6 +43,33 @@ const customerLabel = (conversation: ChannelConversation) => {
   const suffix = conversation.external_user_id?.slice(-6) || 'unknown';
   return `${conversation.provider} customer ${suffix}`;
 };
+
+const formatMessageTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatListTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
+const providerClass = (provider: Provider) => {
+  if (provider === 'line') return 'bg-green-100 text-green-700';
+  if (provider === 'telegram') return 'bg-sky-100 text-sky-700';
+  if (provider === 'facebook') return 'bg-blue-100 text-blue-700';
+  return 'bg-gray-100 text-gray-600';
+};
+
+const quickReplies = ['Hello, how can I help?', 'Please wait a moment.', 'Can you share more details?', 'Thank you.'];
 
 export default function SharedChannelInboxPage() {
   const params = useParams();
@@ -166,6 +194,13 @@ export default function SharedChannelInboxPage() {
     }
   };
 
+  const handleReplyKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendManualReply();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 text-gray-500">
@@ -184,11 +219,16 @@ export default function SharedChannelInboxPage() {
   }
 
   return (
-    <div className="grid h-screen bg-white text-gray-900 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="grid h-[100dvh] overflow-hidden bg-white text-gray-900 lg:grid-cols-[320px_minmax(0,1fr)_300px]">
       <aside className="min-h-0 border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Shared Channel Inbox</p>
-          <h1 className="mt-1 text-lg font-bold">{config?.agent_name || 'Channel Inbox'}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Shared Channel Inbox</p>
+              <h1 className="mt-1 truncate text-lg font-bold">{config?.agent_name || 'Channel Inbox'}</h1>
+            </div>
+            <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">Live</span>
+          </div>
           <div className="mt-3 flex items-center gap-2">
             <select
               value={provider}
@@ -210,22 +250,28 @@ export default function SharedChannelInboxPage() {
             </button>
           </div>
         </div>
-        <div className="h-[calc(100vh-121px)] overflow-y-auto">
+        <div className="h-[calc(100dvh-121px)] overflow-y-auto">
           {conversations.length === 0 ? (
-            <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
+            <div className="flex h-48 items-center justify-center p-6 text-center text-sm text-gray-500">No channel messages yet.</div>
           ) : (
             conversations.map((conversation) => (
               <button
                 key={conversation.id}
                 onClick={() => setSelectedId(conversation.id)}
-                className={`w-full border-b border-gray-100 p-4 text-left ${selectedConversation?.id === conversation.id ? 'bg-primary-50' : 'hover:bg-gray-50'}`}
+                className={`w-full border-b border-gray-100 p-4 text-left transition-colors ${selectedConversation?.id === conversation.id ? 'bg-primary-50' : 'hover:bg-gray-50'}`}
               >
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium capitalize text-gray-600">{conversation.provider}</span>
-                  {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Paused</span>}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${providerClass(conversation.provider)}`}>{conversation.provider}</span>
+                      {conversation.conversation_type === 'group' && <span className="rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">Group</span>}
+                      {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Paused</span>}
+                    </div>
+                    <p className="mt-2 truncate font-medium">{customerLabel(conversation)}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-gray-400">{formatListTime(conversation.last_message_at)}</span>
                 </div>
-                <p className="mt-2 truncate font-medium">{customerLabel(conversation)}</p>
-                <p className="mt-1 line-clamp-2 text-sm text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
+                <p className="mt-1 line-clamp-2 text-sm leading-5 text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
               </button>
             ))
           )}
@@ -235,43 +281,62 @@ export default function SharedChannelInboxPage() {
       <main className="flex min-h-0 flex-col bg-white">
         {selectedConversation ? (
           <>
-            <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4">
-              <div>
-                <h2 className="font-semibold">{customerLabel(selectedConversation)}</h2>
-                <p className="text-sm capitalize text-gray-500">
-                  {selectedConversation.provider} {selectedConversation.conversation_type === 'group' ? 'group' : 'channel'} · shared view
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white p-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate font-semibold">{customerLabel(selectedConversation)}</h2>
+                  <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${providerClass(selectedConversation.provider)}`}>{selectedConversation.provider}</span>
+                </div>
+                <p className="mt-1 text-sm capitalize text-gray-500">
+                  {selectedConversation.conversation_type === 'group' ? 'Group conversation' : 'Direct channel'} · shared view
                 </p>
               </div>
               <button
                 onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}
               >
                 {selectedConversation.human_takeover ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
                 {selectedConversation.human_takeover ? 'AI Paused' : 'AI Active'}
               </button>
             </div>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-              {selectedConversation.messages.map((message) => (
-                <div key={message.id} className={`w-fit max-w-[80%] break-words rounded-lg px-4 py-3 text-sm ${message.direction === 'inbound' ? 'bg-gray-100 text-gray-900' : 'ml-auto bg-primary-500 text-white'}`}>
-                  {message.sender_display_name && (
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4">
+              {selectedConversation.messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet.</div>
+              ) : selectedConversation.messages.map((message) => (
+                <div key={message.id} className={`w-fit max-w-[76%] break-words rounded-lg px-3.5 py-2.5 text-sm shadow-sm ${message.direction === 'inbound' ? 'bg-white text-gray-900' : message.sender_type === 'agent' ? 'ml-auto bg-indigo-500 text-white' : 'ml-auto bg-primary-500 text-white'}`}>
+                  {message.sender_display_name && selectedConversation.conversation_type === 'group' && (
                     <p className="mb-1 text-[11px] font-semibold opacity-70">{message.sender_display_name}</p>
                   )}
-                  <p>{message.text}</p>
-                  {!message.sender_display_name && <p className="mt-1 text-[11px] opacity-70">{message.sender_type}</p>}
+                  <p className="whitespace-pre-wrap leading-5">{message.text}</p>
+                  <p className="mt-1 text-right text-[10px] opacity-60">{formatMessageTime(message.created_at)}{message.sender_type === 'agent' ? ' · AI' : message.sender_type === 'human' ? ' · Human' : ''}</p>
                 </div>
               ))}
             </div>
-            <div className="border-t border-gray-200 p-4">
+            <div className="border-t border-gray-200 bg-white p-4">
               {sendError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{sendError}</div>}
-              <div className="flex gap-2">
-                <input
+              <div className="mb-3 flex flex-wrap gap-2">
+                {quickReplies.map((reply) => (
+                  <button
+                    key={reply}
+                    type="button"
+                    onClick={() => setReplyText(reply)}
+                    className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-primary-300 hover:text-primary-700"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-end gap-2">
+                <textarea
                   value={replyText}
                   onFocus={pauseConversationForHuman}
+                  onKeyDown={handleReplyKeyDown}
                   onChange={(event) => setReplyText(event.target.value)}
                   placeholder="Manual reply to customer..."
-                  className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                  rows={2}
+                  className="min-w-0 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
                 />
-                <button onClick={sendManualReply} disabled={saving} className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
+                <button onClick={sendManualReply} disabled={saving || !replyText.trim()} className="rounded-lg bg-primary-500 px-4 py-3 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </button>
               </div>
@@ -281,6 +346,78 @@ export default function SharedChannelInboxPage() {
           <div className="flex h-full items-center justify-center text-gray-500">Select a conversation</div>
         )}
       </main>
+
+      <SharedProfilePanel conversation={selectedConversation} />
     </div>
+  );
+}
+
+function SharedProfilePanel({ conversation }: { conversation?: ChannelConversation }) {
+  if (!conversation) {
+    return (
+      <aside className="hidden min-h-0 border-l border-gray-200 bg-white lg:block">
+        <div className="flex h-full items-center justify-center p-6 text-center text-sm text-gray-500">Select a conversation to see details.</div>
+      </aside>
+    );
+  }
+
+  const isGroup = conversation.conversation_type === 'group';
+  return (
+    <aside className="hidden min-h-0 overflow-y-auto border-l border-gray-200 bg-white lg:block">
+      <div className="border-b border-gray-200 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</p>
+        <h3 className="mt-1 truncate font-semibold text-gray-900">{customerLabel(conversation)}</h3>
+      </div>
+      <div className="space-y-4 p-4">
+        <div className="rounded-lg bg-gray-50 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <MessageSquare className="h-4 w-4 text-primary-500" />
+            Conversation
+          </div>
+          <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">Channel</dt>
+              <dd className="font-medium capitalize text-gray-900">{conversation.provider}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">Type</dt>
+              <dd className="font-medium text-gray-900">{isGroup ? 'Group' : 'Direct'}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">AI</dt>
+              <dd className={conversation.human_takeover ? 'font-medium text-amber-600' : 'font-medium text-green-600'}>{conversation.human_takeover ? 'Paused' : 'Active'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Clock className="h-4 w-4 text-primary-500" />
+            Activity
+          </div>
+          <p className="mt-3 text-sm text-gray-500">Last message</p>
+          <p className="mt-1 text-sm font-medium text-gray-900">{formatListTime(conversation.last_message_at) || 'Unknown'}</p>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Tag className="h-4 w-4 text-primary-500" />
+            Tags
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700">Support</span>
+            {conversation.human_takeover && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">Human takeover</span>}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Hash className="h-4 w-4 text-primary-500" />
+            Reference
+          </div>
+          <p className="mt-3 break-all text-xs text-gray-500">{conversation.external_chat_id || conversation.external_user_id}</p>
+        </div>
+      </div>
+    </aside>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle, Copy, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, UserPlus } from 'lucide-react';
+import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Bell, CheckCircle, Clock, Copy, Hash, Inbox, Loader2, Maximize2, Megaphone, MessageSquare, Minimize2, PauseCircle, PlayCircle, Save, Send, Settings, Tag, UserPlus } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -19,6 +19,7 @@ interface ChannelConversation {
   id: string;
   provider: Provider;
   external_user_id: string;
+  external_chat_id?: string;
   display_name?: string;
   conversation_type?: string;
   status: string;
@@ -76,6 +77,33 @@ const customerLabel = (conversation: ChannelConversation) => {
   const suffix = conversation.external_user_id?.slice(-6) || 'unknown';
   return `${conversation.provider} customer ${suffix}`;
 };
+
+const formatMessageTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const formatListTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
+
+const providerClass = (provider: Provider) => {
+  if (provider === 'line') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200';
+  if (provider === 'telegram') return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-200';
+  if (provider === 'facebook') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200';
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+};
+
+const quickReplies = ['Hello, how can I help?', 'Please wait a moment.', 'Can you share more details?', 'Thank you.'];
 
 export default function AgentChannels({ agentId }: { agentId: string }) {
   const [activeView, setActiveView] = useState<'inbox' | 'leads' | 'settings'>('inbox');
@@ -175,11 +203,19 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (!inboxFullscreen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setInboxFullscreen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [inboxFullscreen]);
 
   const updateConversation = async (conversation: ChannelConversation, patch: Partial<ChannelConversation>) => {
@@ -225,6 +261,13 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       setSendError(error instanceof Error ? error.message : 'Message was not delivered.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReplyKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendManualReply();
     }
   };
 
@@ -366,44 +409,59 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
-            <div className={inboxFullscreen ? 'fixed inset-0 z-50 grid gap-0 bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid min-h-[calc(100vh-210px)] gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
-              <div className={`overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
+            <div className={inboxFullscreen ? 'fixed inset-0 z-[9999] grid h-[100dvh] w-screen grid-rows-[1fr] gap-0 overflow-hidden bg-white dark:bg-gray-950 lg:grid-cols-[320px_minmax(0,1fr)_300px]' : 'grid min-h-[calc(100vh-210px)] gap-4 xl:grid-cols-[320px_minmax(0,1fr)_300px]'}>
+              <div className={`min-h-0 overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">Conversations</h3>
+                      <p className="mt-1 text-xs text-gray-500">{conversations.length} active thread{conversations.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">Live</span>
+                  </div>
                 </div>
-                <div className={inboxFullscreen ? 'max-h-[calc(100vh-84px)] overflow-y-auto' : 'max-h-[calc(100vh-285px)] overflow-y-auto'}>
+                <div className={inboxFullscreen ? 'h-[calc(100dvh-73px)] overflow-y-auto' : 'max-h-[calc(100vh-285px)] overflow-y-auto'}>
                   {conversations.length === 0 ? (
-                    <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
+                    <div className="flex h-48 items-center justify-center p-6 text-center text-sm text-gray-500">No channel messages yet.</div>
                   ) : (
                     conversations.map((conversation) => (
                       <button
                         key={conversation.id}
                         onClick={() => setSelectedId(conversation.id)}
-                        className={`w-full border-b border-gray-100 p-4 text-left dark:border-gray-900 ${selectedConversation?.id === conversation.id ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+                        className={`w-full border-b border-gray-100 p-4 text-left transition-colors dark:border-gray-900 ${selectedConversation?.id === conversation.id ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-900'}`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium capitalize text-gray-600 dark:bg-gray-800 dark:text-gray-300">{conversation.provider}</span>
-                          {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Paused</span>}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${providerClass(conversation.provider)}`}>{conversation.provider}</span>
+                              {conversation.conversation_type === 'group' && <span className="rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-200">Group</span>}
+                              {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">Paused</span>}
+                            </div>
+                            <p className="mt-2 truncate font-medium text-gray-900 dark:text-white">{customerLabel(conversation)}</p>
+                          </div>
+                          <span className="shrink-0 text-xs text-gray-400">{formatListTime(conversation.last_message_at)}</span>
                         </div>
-                        <p className="mt-2 truncate font-medium text-gray-900 dark:text-white">{customerLabel(conversation)}</p>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
+                        <p className="mt-1 line-clamp-2 text-sm leading-5 text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
                       </button>
                     ))
                   )}
                 </div>
               </div>
 
-              <div className={`bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'shadow-none' : 'rounded-lg'}`}>
+              <div className={`min-h-0 bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'shadow-none' : 'rounded-lg'}`}>
                 {selectedConversation ? (
-                  <div className={inboxFullscreen ? 'flex h-screen flex-col' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
-                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
-                        <p className="text-sm capitalize text-gray-500">
-                          {selectedConversation.provider} {selectedConversation.conversation_type === 'group' ? 'group' : 'channel'} · live refresh
+                  <div className={inboxFullscreen ? 'flex h-[100dvh] min-h-0 flex-col overflow-hidden' : 'flex h-full min-h-[calc(100vh-210px)] flex-col'}>
+                    <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="truncate font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
+                          <span className={`rounded px-2 py-0.5 text-xs font-medium capitalize ${providerClass(selectedConversation.provider)}`}>{selectedConversation.provider}</span>
+                        </div>
+                        <p className="mt-1 text-sm capitalize text-gray-500">
+                          {selectedConversation.conversation_type === 'group' ? 'Group conversation' : 'Direct channel'} · {selectedConversation.human_takeover ? 'Human handling' : 'AI ready'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         <button
                           onClick={() => setInboxFullscreen((current) => !current)}
                           className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
@@ -414,39 +472,55 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                         </button>
                         <button
                           onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
-                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${selectedConversation.human_takeover ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200'}`}
                         >
                           {selectedConversation.human_takeover ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
                           {selectedConversation.human_takeover ? 'AI Paused' : 'AI Active'}
                         </button>
                       </div>
                     </div>
-                    <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                      {selectedConversation.messages.map((message) => (
-                        <div key={message.id} className={`w-fit max-w-[80%] break-words rounded-lg px-4 py-3 text-sm ${message.direction === 'inbound' ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100' : 'ml-auto bg-primary-500 text-white'}`}>
-                          {message.sender_display_name && (
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-4 dark:bg-gray-900/60">
+                      {selectedConversation.messages.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet.</div>
+                      ) : selectedConversation.messages.map((message) => (
+                        <div key={message.id} className={`w-fit max-w-[76%] break-words rounded-lg px-3.5 py-2.5 text-sm shadow-sm ${message.direction === 'inbound' ? 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100' : message.sender_type === 'agent' ? 'ml-auto bg-indigo-500 text-white' : 'ml-auto bg-primary-500 text-white'}`}>
+                          {message.sender_display_name && selectedConversation.conversation_type === 'group' && (
                             <p className="mb-1 text-[11px] font-semibold opacity-70">{message.sender_display_name}</p>
                           )}
-                          <p>{message.text}</p>
-                          {!message.sender_display_name && <p className="mt-1 text-[11px] opacity-70">{message.sender_type}</p>}
+                          <p className="whitespace-pre-wrap leading-5">{message.text}</p>
+                          <p className="mt-1 text-right text-[10px] opacity-60">{formatMessageTime(message.created_at)}{message.sender_type === 'agent' ? ' · AI' : message.sender_type === 'human' ? ' · Human' : ''}</p>
                         </div>
                       ))}
                     </div>
-                    <div className="border-t border-gray-200 p-4 dark:border-gray-800">
+                    <div className="border-t border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
                       {sendError && (
                         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
                           {sendError}
                         </div>
                       )}
-                      <div className="flex gap-2">
-                        <input
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {quickReplies.map((reply) => (
+                          <button
+                            key={reply}
+                            type="button"
+                            onClick={() => setReplyText(reply)}
+                            className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-primary-300 hover:text-primary-700 dark:border-gray-800 dark:text-gray-300 dark:hover:border-primary-700"
+                          >
+                            {reply}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <textarea
                           value={replyText}
                           onFocus={pauseConversationForHuman}
+                          onKeyDown={handleReplyKeyDown}
                           onChange={(event) => setReplyText(event.target.value)}
                           placeholder="Manual reply to customer..."
-                          className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                          rows={2}
+                          className="min-w-0 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                         />
-                        <button onClick={sendManualReply} disabled={saving} className="rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
+                        <button onClick={sendManualReply} disabled={saving || !replyText.trim()} className="rounded-lg bg-primary-500 px-4 py-3 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50">
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         </button>
                       </div>
@@ -456,6 +530,8 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                   <div className="flex h-full min-h-[520px] items-center justify-center text-gray-500">Select a conversation</div>
                 )}
               </div>
+
+              <ChannelProfilePanel conversation={selectedConversation} />
             </div>
           )}
 
@@ -537,6 +613,76 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
         </>
       )}
     </div>
+  );
+}
+
+function ChannelProfilePanel({ conversation }: { conversation?: ChannelConversation }) {
+  if (!conversation) {
+    return (
+      <aside className="hidden min-h-0 bg-white shadow dark:bg-gray-950 xl:block xl:rounded-lg">
+        <div className="flex h-full items-center justify-center p-6 text-center text-sm text-gray-500">Select a conversation to see customer details.</div>
+      </aside>
+    );
+  }
+
+  const isGroup = conversation.conversation_type === 'group';
+  return (
+    <aside className="hidden min-h-0 overflow-y-auto bg-white shadow dark:bg-gray-950 xl:block xl:rounded-lg">
+      <div className="border-b border-gray-200 p-4 dark:border-gray-800">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Profile</p>
+        <h3 className="mt-1 truncate font-semibold text-gray-900 dark:text-white">{customerLabel(conversation)}</h3>
+      </div>
+      <div className="space-y-4 p-4">
+        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <MessageSquare className="h-4 w-4 text-primary-500" />
+            Conversation
+          </div>
+          <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">Channel</dt>
+              <dd className="font-medium capitalize text-gray-900 dark:text-white">{conversation.provider}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">Type</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">{isGroup ? 'Group' : 'Direct'}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-gray-500">AI</dt>
+              <dd className={conversation.human_takeover ? 'font-medium text-amber-600' : 'font-medium text-green-600'}>{conversation.human_takeover ? 'Paused' : 'Active'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Clock className="h-4 w-4 text-primary-500" />
+            Activity
+          </div>
+          <p className="mt-3 text-sm text-gray-500">Last message</p>
+          <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{formatListTime(conversation.last_message_at) || 'Unknown'}</p>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Tag className="h-4 w-4 text-primary-500" />
+            Tags
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">Support</span>
+            {conversation.human_takeover && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">Human takeover</span>}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
+            <Hash className="h-4 w-4 text-primary-500" />
+            Reference
+          </div>
+          <p className="mt-3 break-all text-xs text-gray-500">{conversation.external_chat_id || conversation.external_user_id}</p>
+        </div>
+      </div>
+    </aside>
   );
 }
 
