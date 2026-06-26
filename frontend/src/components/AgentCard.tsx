@@ -8,10 +8,9 @@ import { useRouter } from 'next/navigation';
 interface AgentCardProps {
   agent: Agent;
   onDelete?: (agentId: string) => void;
-  onOpen?: (agentId: string) => void;
 }
 
-export default function AgentCard({ agent, onDelete, onOpen }: AgentCardProps) {
+export default function AgentCard({ agent, onDelete }: AgentCardProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -99,7 +98,7 @@ export default function AgentCard({ agent, onDelete, onOpen }: AgentCardProps) {
 
       {/* Chat button */}
       <button
-        onClick={() => onOpen ? onOpen(agent.id) : router.push(`/dashboard?view=playground&agent=${agent.id}`)}
+        onClick={() => router.push(`/agents/${agent.id}/playground`)}
         className="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 flex items-center justify-center gap-2"
       >
         <MessageSquare className="w-4 h-4" />

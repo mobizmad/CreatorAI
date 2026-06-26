@@ -11,7 +11,6 @@ import {
   Moon,
   Plus,
   Search,
-  Settings,
   Star,
   Store,
   Sun,
@@ -21,13 +20,12 @@ import AIStudio from '@/components/AIStudio';
 import MediaEditor from '@/components/MediaEditor';
 import AgentCard from '@/components/AgentCard';
 import AgentChannels from '@/components/AgentChannels';
-import ChatInterface from '@/components/ChatInterface';
 import DefaultChatInterface from '@/components/DefaultChatInterface';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { agentAPI, authAPI } from '@/lib/api';
 import type { Agent, User } from '@/lib/types';
 
-type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground';
+type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor';
 
 interface MarketplaceAgent {
   id: string;
@@ -56,7 +54,6 @@ export default function Dashboard() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [selectedChannelAgentId, setSelectedChannelAgentId] = useState('');
-  const [selectedPlaygroundAgentId, setSelectedPlaygroundAgentId] = useState('');
 
   useEffect(() => {
     loadAgents();
@@ -67,7 +64,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const view = searchParams.get('view') as DashboardView | null;
-    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground'].includes(view)) {
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor'].includes(view)) {
       setActiveView(view);
     }
   }, [searchParams]);
@@ -75,17 +72,13 @@ export default function Dashboard() {
   useEffect(() => {
     const agentId = searchParams.get('agent');
     if (agentId) setSelectedChannelAgentId(agentId);
-    if (agentId) setSelectedPlaygroundAgentId(agentId);
   }, [searchParams]);
 
   useEffect(() => {
     if (!selectedChannelAgentId && agents[0]) {
       setSelectedChannelAgentId(agents[0].id);
     }
-    if (!selectedPlaygroundAgentId && agents[0]) {
-      setSelectedPlaygroundAgentId(agents[0].id);
-    }
-  }, [agents, selectedChannelAgentId, selectedPlaygroundAgentId]);
+  }, [agents, selectedChannelAgentId]);
 
   useEffect(() => {
     if (activeView !== 'marketplace') return;
@@ -167,15 +160,7 @@ export default function Dashboard() {
       <main className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900">
         {activeView === 'chat' && <DefaultChatInterface />}
         {activeView === 'agents' && (
-          <AgentsView
-            agents={agents}
-            onDelete={handleDeleteAgent}
-            onCreate={() => router.push('/templates')}
-            onOpen={(agentId) => {
-              setSelectedPlaygroundAgentId(agentId);
-              router.push(`/dashboard?view=playground&agent=${agentId}`);
-            }}
-          />
+          <AgentsView agents={agents} onDelete={handleDeleteAgent} onCreate={() => router.push('/templates')} />
         )}
         {activeView === 'marketplace' && (
           <MarketplaceView
@@ -201,94 +186,7 @@ export default function Dashboard() {
           />
         )}
         {activeView === 'media-editor' && <MediaEditor />}
-        {activeView === 'playground' && (
-          <PlaygroundView
-            agents={agents}
-            selectedAgentId={selectedPlaygroundAgentId}
-            onSelectAgent={(agentId) => {
-              setSelectedPlaygroundAgentId(agentId);
-              router.push(`/dashboard?view=playground&agent=${agentId}`);
-            }}
-            onCreate={() => router.push('/templates')}
-          />
-        )}
       </main>
-    </div>
-  );
-}
-
-function PlaygroundView({
-  agents,
-  selectedAgentId,
-  onSelectAgent,
-  onCreate,
-}: {
-  agents: Agent[];
-  selectedAgentId: string;
-  onSelectAgent: (agentId: string) => void;
-  onCreate: () => void;
-}) {
-  const router = useRouter();
-  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) || agents[0];
-
-  return (
-    <div className="h-full overflow-hidden">
-      <div className="flex h-full flex-col px-4 py-4 lg:px-6">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Agent Playground</h1>
-            <p className="mt-1 text-gray-600 dark:text-gray-400">Chat with your selected agent inside the dashboard.</p>
-          </div>
-          {agents.length > 0 && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="w-full sm:w-80">
-                <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Agent</span>
-                <select
-                  value={selectedAgent?.id || ''}
-                  onChange={(event) => onSelectAgent(event.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
-                >
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {selectedAgent && (
-                <button
-                  onClick={() => router.push(`/agents/${selectedAgent.id}/playground`)}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {!selectedAgent ? (
-          <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white text-center dark:border-gray-800 dark:bg-gray-950">
-            <div>
-              <Bot className="mx-auto h-12 w-12 text-gray-300" />
-              <h2 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">No agents yet</h2>
-              <p className="mt-1 text-sm text-gray-500">Create an agent first, then open the playground.</p>
-              <button
-                onClick={onCreate}
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-600"
-              >
-                <Plus className="w-4 h-4" />
-                Create Agent
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-hidden rounded-lg bg-white shadow dark:bg-gray-950">
-            <ChatInterface agentId={selectedAgent.id} />
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -357,12 +255,10 @@ function AgentsView({
   agents,
   onDelete,
   onCreate,
-  onOpen,
 }: {
   agents: Agent[];
   onDelete: (agentId: string) => void;
   onCreate: () => void;
-  onOpen: (agentId: string) => void;
 }) {
   return (
     <div className="h-full overflow-y-auto">
@@ -397,7 +293,7 @@ function AgentsView({
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} onDelete={onDelete} onOpen={onOpen} />
+              <AgentCard key={agent.id} agent={agent} onDelete={onDelete} />
             ))}
           </div>
         )}
