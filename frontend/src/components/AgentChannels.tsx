@@ -10,6 +10,7 @@ interface ChannelMessage {
   id: string;
   direction: string;
   sender_type: string;
+  sender_display_name?: string;
   text: string;
   created_at: string;
 }
@@ -19,6 +20,7 @@ interface ChannelConversation {
   provider: Provider;
   external_user_id: string;
   display_name?: string;
+  conversation_type?: string;
   status: string;
   human_takeover: boolean;
   last_message_preview?: string;
@@ -383,7 +385,9 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                     <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-white">{customerLabel(selectedConversation)}</h3>
-                        <p className="text-sm capitalize text-gray-500">{selectedConversation.provider} channel · live refresh</p>
+                        <p className="text-sm capitalize text-gray-500">
+                          {selectedConversation.provider} {selectedConversation.conversation_type === 'group' ? 'group' : 'channel'} · live refresh
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -405,9 +409,12 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                     </div>
                     <div className="flex-1 space-y-3 overflow-y-auto p-4">
                       {selectedConversation.messages.map((message) => (
-                        <div key={message.id} className={`max-w-[80%] rounded-lg px-4 py-3 text-sm ${message.direction === 'inbound' ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100' : 'ml-auto bg-primary-500 text-white'}`}>
+                        <div key={message.id} className={`w-fit max-w-[80%] break-words rounded-lg px-4 py-3 text-sm ${message.direction === 'inbound' ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100' : 'ml-auto bg-primary-500 text-white'}`}>
+                          {message.sender_display_name && (
+                            <p className="mb-1 text-[11px] font-semibold opacity-70">{message.sender_display_name}</p>
+                          )}
                           <p>{message.text}</p>
-                          <p className="mt-1 text-[11px] opacity-70">{message.sender_type}</p>
+                          {!message.sender_display_name && <p className="mt-1 text-[11px] opacity-70">{message.sender_type}</p>}
                         </div>
                       ))}
                     </div>

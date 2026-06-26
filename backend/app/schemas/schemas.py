@@ -350,6 +350,8 @@ class ChannelMessageResponse(BaseModel):
     conversation_id: UUID
     direction: str
     sender_type: str
+    sender_external_id: Optional[str] = None
+    sender_display_name: Optional[str] = None
     text: str
     created_at: datetime
 
@@ -363,6 +365,7 @@ class ChannelConversationResponse(BaseModel):
     provider: str
     external_user_id: str
     external_chat_id: Optional[str]
+    conversation_type: Optional[str] = "private"
     display_name: Optional[str]
     status: str
     human_takeover: bool

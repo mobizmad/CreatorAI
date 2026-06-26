@@ -36,7 +36,10 @@ def record_channel_message(
     external_user_id: str,
     text: str,
     external_chat_id: str | None = None,
+    conversation_type: str = "private",
     display_name: str | None = None,
+    sender_external_id: str | None = None,
+    sender_display_name: str | None = None,
     raw_payload: dict | None = None,
 ) -> ChannelConversation:
     conversation = (
@@ -54,12 +57,14 @@ def record_channel_message(
             provider=provider,
             external_user_id=external_user_id,
             external_chat_id=external_chat_id,
+            conversation_type=conversation_type,
             display_name=display_name,
         )
         db.add(conversation)
         db.flush()
 
     conversation.external_chat_id = external_chat_id or conversation.external_chat_id
+    conversation.conversation_type = conversation_type or conversation.conversation_type
     conversation.display_name = display_name or conversation.display_name
     conversation.last_message_preview = text[:180]
     conversation.last_message_at = datetime.utcnow()
@@ -68,6 +73,8 @@ def record_channel_message(
             conversation_id=conversation.id,
             direction="inbound",
             sender_type="user",
+            sender_external_id=sender_external_id,
+            sender_display_name=sender_display_name,
             text=text,
             raw_payload=raw_payload,
         )
@@ -93,6 +100,50 @@ def record_channel_reply(db: Session, conversation: ChannelConversation, text: s
 
 async def get_line_profile(access_token: str | None, user_id: str) -> str | None:
     if not access_token or not user_id.startswith("U"):
+        return None
+
+
+async def get_line_group_name(access_token: str | None, group_id: str | None) -> str | None:
+    if not access_token or not group_id:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.get(
+                f"https://api.line.me/v2/bot/group/{group_id}/summary",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            return data.get("groupName")
+    except Exception as exc:
+        print(f"LINE group lookup failed: {exc}")
+        return None
+
+
+async def get_line_member_profile(
+    access_token: str | None,
+    user_id: str | None,
+    group_id: str | None = None,
+    room_id: str | None = None,
+) -> str | None:
+    if not access_token or not user_id:
+        return None
+    if group_id:
+        url = f"https://api.line.me/v2/bot/group/{group_id}/member/{user_id}"
+    elif room_id:
+        url = f"https://api.line.me/v2/bot/room/{room_id}/member/{user_id}"
+    else:
+        url = f"https://api.line.me/v2/bot/profile/{user_id}"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            response = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            return data.get("displayName")
+    except Exception as exc:
+        print(f"LINE member profile lookup failed: {exc}")
         return None
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -185,16 +236,36 @@ async def receive_line_webhook(agent_id: UUID, request: Request, db: Session = D
         if event.get("type") != "message" or message.get("type") != "text":
             continue
         source = event.get("source") or {}
-        user_id = source.get("userId") or source.get("groupId") or source.get("roomId") or "unknown"
-        display_name = await get_line_profile(integration.access_token, user_id)
+        source_type = source.get("type") or "user"
+        sender_user_id = source.get("userId") or "unknown"
+        group_id = source.get("groupId")
+        room_id = source.get("roomId")
+        conversation_key = group_id or room_id or sender_user_id
+        conversation_type = "group" if group_id else "room" if room_id else "private"
+        sender_name = await get_line_member_profile(
+            integration.access_token,
+            sender_user_id,
+            group_id=group_id,
+            room_id=room_id,
+        )
+        display_name = (
+            await get_line_group_name(integration.access_token, group_id)
+            if group_id
+            else "LINE Room"
+            if room_id
+            else sender_name
+        )
         conversation = record_channel_message(
             db,
             agent_id,
             "line",
-            user_id,
+            conversation_key,
             message.get("text") or "",
-            external_chat_id=source.get("groupId") or source.get("roomId") or user_id,
+            external_chat_id=conversation_key,
+            conversation_type=conversation_type,
             display_name=display_name,
+            sender_external_id=sender_user_id,
+            sender_display_name=sender_name,
             raw_payload=event,
         )
         recorded += 1
@@ -240,18 +311,24 @@ async def receive_telegram_webhook(agent_id: UUID, request: Request, db: Session
     if text:
         chat = message.get("chat") or {}
         sender = message.get("from") or {}
-        external_user_id = str(sender.get("id") or chat.get("id") or "unknown")
-        display_name = " ".join(
+        chat_id = str(chat.get("id") or sender.get("id") or "unknown")
+        chat_type = chat.get("type") or "private"
+        sender_id = str(sender.get("id") or chat_id)
+        sender_name = " ".join(
             part for part in [sender.get("first_name"), sender.get("last_name")] if part
         ) or sender.get("username")
+        display_name = chat.get("title") or sender_name
         record_channel_message(
             db,
             agent_id,
             "telegram",
-            external_user_id,
+            chat_id,
             text,
-            external_chat_id=str(chat.get("id") or external_user_id),
+            external_chat_id=chat_id,
+            conversation_type="group" if chat_type in {"group", "supergroup"} else "private",
             display_name=display_name,
+            sender_external_id=sender_id,
+            sender_display_name=sender_name,
             raw_payload=payload,
         )
         recorded = 1

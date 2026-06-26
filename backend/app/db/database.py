@@ -68,3 +68,18 @@ def ensure_schema_updates():
             for column_name, column_type in agent_additions.items():
                 if column_name not in agent_columns:
                     conn.execute(text(f"ALTER TABLE agents ADD COLUMN {column_name} {column_type}"))
+
+        if "channel_conversations" in table_names:
+            conversation_columns = {column["name"] for column in inspector.get_columns("channel_conversations")}
+            if "conversation_type" not in conversation_columns:
+                conn.execute(text("ALTER TABLE channel_conversations ADD COLUMN conversation_type VARCHAR DEFAULT 'private'"))
+
+        if "channel_messages" in table_names:
+            message_columns = {column["name"] for column in inspector.get_columns("channel_messages")}
+            message_additions = {
+                "sender_external_id": "VARCHAR",
+                "sender_display_name": "VARCHAR",
+            }
+            for column_name, column_type in message_additions.items():
+                if column_name not in message_columns:
+                    conn.execute(text(f"ALTER TABLE channel_messages ADD COLUMN {column_name} {column_type}"))

@@ -139,6 +139,7 @@ class ChannelConversation(Base):
     provider = Column(String, nullable=False)
     external_user_id = Column(String, nullable=False)
     external_chat_id = Column(String, nullable=True)
+    conversation_type = Column(String, default="private")
     display_name = Column(String, nullable=True)
     status = Column(String, default="open")  # open, paused, closed
     human_takeover = Column(Boolean, default=False)
@@ -158,6 +159,8 @@ class ChannelMessage(Base):
     conversation_id = Column(UUID(as_uuid=True), ForeignKey("channel_conversations.id", ondelete="CASCADE"), nullable=False)
     direction = Column(String, nullable=False)  # inbound, outbound
     sender_type = Column(String, nullable=False)  # user, agent, human, system
+    sender_external_id = Column(String, nullable=True)
+    sender_display_name = Column(String, nullable=True)
     text = Column(Text, nullable=False)
     raw_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

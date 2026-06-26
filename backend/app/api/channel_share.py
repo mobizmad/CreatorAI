@@ -164,8 +164,10 @@ async def send_shared_channel_message(
         conversation_id=conversation.id,
         direction="outbound",
         sender_type="human",
+        sender_display_name="Shared operator",
         text=payload.text,
     )
+    conversation.human_takeover = True
     conversation.last_message_preview = payload.text[:180]
     conversation.last_message_at = datetime.utcnow()
     db.add(message)
