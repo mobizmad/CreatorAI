@@ -136,6 +136,7 @@ export default function MediaEditor() {
   const [newProjectName, setNewProjectName] = useState('');
   const [models, setModels] = useState<StudioModel[]>([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [projectLoadError, setProjectLoadError] = useState<string | null>(null);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeTab, setActiveTab] = useState<EditorTab>('upload');
@@ -320,10 +321,14 @@ export default function MediaEditor() {
 
   const loadProjects = async () => {
     setIsLoadingProjects(true);
+    setProjectLoadError(null);
     try {
       const response = await fetch(`${API}/media-editor/projects`, { headers: authHeaders() });
       if (!response.ok) throw new Error('Failed to load projects');
       setProjects(await response.json());
+    } catch (error) {
+      console.error('Failed to load projects', error);
+      setProjectLoadError('Could not load media projects. Please check your login and try again.');
     } finally {
       setIsLoadingProjects(false);
     }
@@ -1020,6 +1025,10 @@ export default function MediaEditor() {
               {isLoadingProjects ? (
                 <div className="flex justify-center py-16">
                   <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+                </div>
+              ) : projectLoadError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                  {projectLoadError}
                 </div>
               ) : projects.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-950">
