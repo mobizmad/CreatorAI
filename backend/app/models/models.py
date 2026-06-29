@@ -143,6 +143,8 @@ class ChannelConversation(Base):
     display_name = Column(String, nullable=True)
     status = Column(String, default="open")  # open, paused, closed
     human_takeover = Column(Boolean, default=False)
+    unread_count = Column(Integer, default=0)
+    labels = Column(JSON, default=list)
     last_message_preview = Column(Text, nullable=True)
     last_message_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)

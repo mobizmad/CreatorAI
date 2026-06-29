@@ -66,6 +66,7 @@ def record_channel_message(
     conversation.external_chat_id = external_chat_id or conversation.external_chat_id
     conversation.conversation_type = conversation_type or conversation.conversation_type
     conversation.display_name = display_name or conversation.display_name
+    conversation.unread_count = (conversation.unread_count or 0) + 1
     conversation.last_message_preview = text[:180]
     conversation.last_message_at = datetime.utcnow()
     db.add(
@@ -87,6 +88,7 @@ def record_channel_message(
 def record_channel_reply(db: Session, conversation: ChannelConversation, text: str, sender_type: str = "agent") -> None:
     conversation.last_message_preview = text[:180]
     conversation.last_message_at = datetime.utcnow()
+    conversation.unread_count = 0
     db.add(
         ChannelMessage(
             conversation_id=conversation.id,

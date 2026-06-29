@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, PauseCircle, PlayCircle, RefreshCw, Send } from 'lucide-react';
+import { Loader2, PauseCircle, PlayCircle, RefreshCw, Search, Send, Tag, X } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 
 type Provider = 'all' | 'facebook' | 'line' | 'telegram';
@@ -19,10 +19,13 @@ interface ChannelConversation {
   id: string;
   provider: Provider;
   external_user_id: string;
+  external_chat_id?: string;
   display_name?: string;
   conversation_type?: string;
   status: string;
   human_takeover: boolean;
+  unread_count?: number;
+  labels?: string[];
   last_message_preview?: string;
   last_message_at: string;
   messages: ChannelMessage[];
@@ -36,6 +39,7 @@ interface ShareConfig {
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
 const providers: Provider[] = ['all', 'line', 'telegram', 'facebook'];
+const labelOptions = ['New Lead', 'Need Follow Up', 'Paid', 'Problem', 'VIP'];
 
 const customerLabel = (conversation: ChannelConversation) => {
   if (conversation.display_name) return conversation.display_name;
@@ -68,6 +72,7 @@ export default function SharedChannelInboxPage() {
   const [conversations, setConversations] = useState<ChannelConversation[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [replyText, setReplyText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -78,6 +83,31 @@ export default function SharedChannelInboxPage() {
     () => conversations.find((conversation) => conversation.id === selectedId) || conversations[0],
     [conversations, selectedId]
   );
+
+  const unreadTotal = useMemo(
+    () => conversations.reduce((total, conversation) => total + (conversation.unread_count || 0), 0),
+    [conversations]
+  );
+
+  const filteredConversations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return conversations;
+    return conversations.filter((conversation) => {
+      const haystack = [
+        customerLabel(conversation),
+        conversation.provider,
+        conversation.external_user_id,
+        conversation.external_chat_id,
+        conversation.last_message_preview,
+        ...(conversation.labels || []),
+        ...conversation.messages.map((message) => `${message.sender_display_name || ''} ${message.text}`),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [conversations, searchQuery]);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -149,6 +179,23 @@ export default function SharedChannelInboxPage() {
       body: JSON.stringify(patch),
     });
     await loadConversations();
+  };
+
+  const selectConversation = (conversation: ChannelConversation) => {
+    setSelectedId(conversation.id);
+    setSendError('');
+    if (conversation.unread_count) {
+      updateConversation(conversation, { unread_count: 0 });
+    }
+  };
+
+  const toggleConversationLabel = (label: string) => {
+    if (!selectedConversation) return;
+    const currentLabels = selectedConversation.labels || [];
+    const nextLabels = currentLabels.includes(label)
+      ? currentLabels.filter((item) => item !== label)
+      : [...currentLabels, label];
+    updateConversation(selectedConversation, { labels: nextLabels });
   };
 
   const pauseConversationForHuman = async () => {
@@ -226,7 +273,10 @@ export default function SharedChannelInboxPage() {
       <aside className="min-h-0 overflow-hidden border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Shared Channel Inbox</p>
-          <h1 className="mt-1 text-lg font-bold">{config?.agent_name || 'Channel Inbox'}</h1>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <h1 className="min-w-0 truncate text-lg font-bold">{config?.agent_name || 'Channel Inbox'}</h1>
+            {unreadTotal > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">{unreadTotal}</span>}
+          </div>
           <div className="mt-3 flex items-center gap-2">
             <select
               value={provider}
@@ -247,26 +297,51 @@ export default function SharedChannelInboxPage() {
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search chats..."
+              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-9 text-sm outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                title="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="h-[calc(100dvh-121px)] overflow-y-auto">
-          {conversations.length === 0 ? (
+        <div className="h-[calc(100dvh-185px)] overflow-y-auto">
+          {filteredConversations.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">No channel messages yet.</p>
           ) : (
-            conversations.map((conversation) => (
+            filteredConversations.map((conversation) => (
               <button
                 key={conversation.id}
-                onClick={() => {
-                  setSelectedId(conversation.id);
-                  setSendError('');
-                }}
+                onClick={() => selectConversation(conversation)}
                 className={`w-full border-b border-gray-100 p-4 text-left ${selectedConversation?.id === conversation.id ? 'bg-primary-50' : 'hover:bg-gray-50'}`}
               >
                 <div className="flex items-center gap-2">
                   <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium capitalize text-gray-600">{conversation.provider}</span>
                   {conversation.human_takeover && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Paused</span>}
+                  {(conversation.unread_count || 0) > 0 && <span className="ml-auto rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">{conversation.unread_count}</span>}
                 </div>
                 <p className="mt-2 truncate font-medium">{customerLabel(conversation)}</p>
                 <p className="mt-1 line-clamp-2 text-sm text-gray-500">{conversation.last_message_preview || 'No preview'}</p>
+                {(conversation.labels || []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(conversation.labels || []).slice(0, 3).map((label) => (
+                      <span key={label} className="rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-medium text-primary-700">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </button>
             ))
           )}
@@ -282,6 +357,15 @@ export default function SharedChannelInboxPage() {
                 <p className="text-sm capitalize text-gray-500">
                   {selectedConversation.provider} {selectedConversation.conversation_type === 'group' ? 'group' : 'channel'} · shared view
                 </p>
+                {(selectedConversation.labels || []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(selectedConversation.labels || []).map((label) => (
+                      <span key={label} className="rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-medium text-primary-700">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => updateConversation(selectedConversation, { human_takeover: !selectedConversation.human_takeover })}
@@ -290,6 +374,26 @@ export default function SharedChannelInboxPage() {
                 {selectedConversation.human_takeover ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
                 {selectedConversation.human_takeover ? 'AI Paused' : 'AI Active'}
               </button>
+            </div>
+            <div className="shrink-0 border-b border-gray-200 px-4 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1 text-xs font-medium text-gray-500">
+                  <Tag className="h-3.5 w-3.5" />
+                  Labels
+                </span>
+                {labelOptions.map((label) => {
+                  const active = (selectedConversation.labels || []).includes(label);
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => toggleConversationLabel(label)}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${active ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#f3f0e8] p-4">
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-2.5">

@@ -369,6 +369,8 @@ class ChannelConversationResponse(BaseModel):
     display_name: Optional[str]
     status: str
     human_takeover: bool
+    unread_count: int = 0
+    labels: List[str] = []
     last_message_preview: Optional[str]
     last_message_at: datetime
     created_at: datetime
@@ -381,6 +383,8 @@ class ChannelConversationResponse(BaseModel):
 class ChannelConversationUpdate(BaseModel):
     status: Optional[str] = None
     human_takeover: Optional[bool] = None
+    unread_count: Optional[int] = None
+    labels: Optional[List[str]] = None
 
 
 class ChannelLeadCreate(BaseModel):

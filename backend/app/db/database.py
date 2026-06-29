@@ -71,8 +71,14 @@ def ensure_schema_updates():
 
         if "channel_conversations" in table_names:
             conversation_columns = {column["name"] for column in inspector.get_columns("channel_conversations")}
-            if "conversation_type" not in conversation_columns:
-                conn.execute(text("ALTER TABLE channel_conversations ADD COLUMN conversation_type VARCHAR DEFAULT 'private'"))
+            conversation_additions = {
+                "conversation_type": "VARCHAR DEFAULT 'private'",
+                "unread_count": "INTEGER DEFAULT 0",
+                "labels": "JSON DEFAULT '[]'",
+            }
+            for column_name, column_type in conversation_additions.items():
+                if column_name not in conversation_columns:
+                    conn.execute(text(f"ALTER TABLE channel_conversations ADD COLUMN {column_name} {column_type}"))
 
         if "channel_messages" in table_names:
             message_columns = {column["name"] for column in inspector.get_columns("channel_messages")}
