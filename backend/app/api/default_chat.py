@@ -80,7 +80,28 @@ def should_use_search(payload: DefaultChatRequest) -> bool:
         return False
     if "--- ATTACHED FILE:" in payload.message:
         return False
-    return not is_simple_prompt(payload.message)
+    if is_simple_prompt(payload.message):
+        return False
+    text = payload.message.strip().lower()
+    search_intent = [
+        "search",
+        "web",
+        "online",
+        "internet",
+        "look up",
+        "google",
+        "latest",
+        "today",
+        "current",
+        "recent",
+        "news",
+        "weather",
+        "price",
+        "stock",
+        "score",
+        "schedule",
+    ]
+    return any(term in text for term in search_intent)
 
 
 @router.post("/attachments", response_model=DefaultChatAttachmentResponse)

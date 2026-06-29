@@ -53,6 +53,29 @@ const isSimplePrompt = (message: string) => {
   return /^[\d\s+\-*/().=xX?]+$/.test(text) && /\d/.test(text);
 };
 
+const shouldUseWebSearch = (message: string) => {
+  if (isSimplePrompt(message)) return false;
+  const text = message.trim().toLowerCase();
+  return [
+    'search',
+    'web',
+    'online',
+    'internet',
+    'look up',
+    'google',
+    'latest',
+    'today',
+    'current',
+    'recent',
+    'news',
+    'weather',
+    'price',
+    'stock',
+    'score',
+    'schedule',
+  ].some((term) => text.includes(term));
+};
+
 const shouldKeepHistoryMessage = (message: Message) => {
   const content = message.content.trim();
   if (!content) return false;
@@ -573,7 +596,7 @@ export default function DefaultChatInterface() {
           stream: true,
           provider: requestModel.provider,
           model: requestModel.model,
-          web_search: hasAttachment || isSimplePrompt(plainUserMessage) ? false : webSearchEnabled,
+          web_search: !hasAttachment && webSearchEnabled && shouldUseWebSearch(plainUserMessage),
           images,
         }),
         signal: controller.signal,
