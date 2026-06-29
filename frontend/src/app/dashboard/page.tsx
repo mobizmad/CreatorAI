@@ -171,7 +171,9 @@ export default function Dashboard() {
       />
 
       <main className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900">
-        {activeView === 'chat' && <DefaultChatInterface />}
+        <div className={activeView === 'chat' ? 'h-full' : 'hidden'}>
+          <DefaultChatInterface />
+        </div>
         {activeView === 'agents' && (
           <AgentsView
             agents={agents}
