@@ -60,6 +60,9 @@ const shouldKeepHistoryMessage = (message: Message) => {
   if (content === 'Generation canceled.') return false;
   if (content.startsWith('🔍 Searching through web')) return false;
   if (content.includes('Chat API route is not available')) return false;
+  if (content.includes("we've established that you're saying hello")) return false;
+  if (content.includes("Are you looking for information on Adele")) return false;
+  if (content.includes('I am still under development')) return false;
   return true;
 };
 

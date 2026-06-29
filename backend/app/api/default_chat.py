@@ -70,7 +70,7 @@ def is_simple_prompt(message: str) -> bool:
     text = message.strip().lower()
     if re.fullmatch(r"(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no)[!.?\\s]*", text):
         return True
-    if re.fullmatch(r"[\\d\\s+\\-*/().=xX?]+", text) and re.search(r"\\d", text):
+    if re.fullmatch(r"[\d\s+*/().=xX?-]+", text) and re.search(r"\d", text):
         return True
     return False
 
