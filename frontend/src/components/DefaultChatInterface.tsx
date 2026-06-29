@@ -47,6 +47,22 @@ const GEMMA_MODEL = CHAT_MODELS.find((model) => model.model === 'gemma4:latest')
 const CODING_MODEL = CHAT_MODELS.find((model) => model.model === 'qwen3:8b') || GEMMA_MODEL;
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
+const isSimplePrompt = (message: string) => {
+  const text = message.trim().toLowerCase();
+  if (/^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no)[!.?\s]*$/.test(text)) return true;
+  return /^[\d\s+\-*/().=xX?]+$/.test(text) && /\d/.test(text);
+};
+
+const shouldKeepHistoryMessage = (message: Message) => {
+  const content = message.content.trim();
+  if (!content) return false;
+  if (content === 'Something went wrong while answering.') return false;
+  if (content === 'Generation canceled.') return false;
+  if (content.startsWith('🔍 Searching through web')) return false;
+  if (content.includes('Chat API route is not available')) return false;
+  return true;
+};
+
 const getErrorMessage = (details: string) => {
   if (details.trim().startsWith('<!DOCTYPE') || details.includes('__next_error__')) {
     return 'Chat API route is not available. Please refresh and try again.';
@@ -514,7 +530,9 @@ export default function DefaultChatInterface() {
         ? `${plainUserMessage}\n\nComparing: ${compareAttachment.name} vs ${attachedFile.name}`
         : `${plainUserMessage}\n\nAttached: ${attachedFile.name}`
       : plainUserMessage;
-    const history = memoryEnabled && !hasAttachment ? messages.slice(-20) : [];
+    const history = memoryEnabled && !hasAttachment && !isSimplePrompt(plainUserMessage)
+      ? messages.filter(shouldKeepHistoryMessage).slice(-8)
+      : [];
     const images =
       shouldCompareImages && compareAttachment?.imageData && attachedFile?.imageData
         ? [compareAttachment.imageData, attachedFile.imageData]
@@ -552,7 +570,7 @@ export default function DefaultChatInterface() {
           stream: true,
           provider: requestModel.provider,
           model: requestModel.model,
-          web_search: hasAttachment ? false : webSearchEnabled,
+          web_search: hasAttachment || isSimplePrompt(plainUserMessage) ? false : webSearchEnabled,
           images,
         }),
         signal: controller.signal,

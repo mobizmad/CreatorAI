@@ -2,6 +2,7 @@ from typing import AsyncGenerator, List, Literal, Optional
 import asyncio
 import json
 import os
+import re
 import shutil
 from uuid import uuid4
 
@@ -48,7 +49,11 @@ class DefaultChatAttachmentResponse(BaseModel):
 
 
 DEFAULT_SYSTEM_PROMPT = """You are AgentBuilder's default AI assistant.
-Answer clearly and helpfully. When a request benefits from structure, use concise sections with useful headings.
+Answer naturally, briefly, and directly.
+For greetings, reply with a simple friendly greeting and ask how you can help.
+For simple arithmetic, answer only the calculation unless the user asks for explanation.
+Do not apologize or say you made a mistake when the previous answer was already correct.
+Ignore failed placeholder messages like "Something went wrong while answering."
 If the user asks about creating or managing agents, explain how to use the Create Agent area without pretending to take actions outside this chat."""
 
 DEFAULT_OLLAMA_MODEL = "llama3.2:3b"
@@ -59,6 +64,23 @@ SUPPORTED_ATTACHMENT_TYPES = {"pdf", "docx", "xlsx", "xls", "txt", "text", "csv"
 
 
 document_processor = DocumentProcessor()
+
+
+def is_simple_prompt(message: str) -> bool:
+    text = message.strip().lower()
+    if re.fullmatch(r"(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|yes|no)[!.?\\s]*", text):
+        return True
+    if re.fullmatch(r"[\\d\\s+\\-*/().=xX?]+", text) and re.search(r"\\d", text):
+        return True
+    return False
+
+
+def should_use_search(payload: DefaultChatRequest) -> bool:
+    if not payload.web_search or payload.images:
+        return False
+    if "--- ATTACHED FILE:" in payload.message:
+        return False
+    return not is_simple_prompt(payload.message)
 
 
 @router.post("/attachments", response_model=DefaultChatAttachmentResponse)
@@ -112,7 +134,13 @@ async def extract_default_chat_attachment(
 
 
 def build_messages(payload: DefaultChatRequest, search_context: Optional[str] = None) -> List[dict]:
-    history = payload.history[-20:]
+    clean_history = [
+        item for item in payload.history[-20:]
+        if item.content.strip()
+        and item.content.strip() != "Something went wrong while answering."
+        and not item.content.startswith("🔍 Searching through web")
+    ]
+    history = clean_history[-8:] if not is_simple_prompt(payload.message) else []
     
     messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
     if payload.images or "--- ATTACHED FILE:" in payload.message:
@@ -137,7 +165,7 @@ def build_messages(payload: DefaultChatRequest, search_context: Optional[str] = 
 async def stream_default_response(payload: DefaultChatRequest, user: User, db: Session, search_context: Optional[str] = None) -> AsyncGenerator[str, None]:
     
     # Show a user-friendly indicator only when web search is active
-    if payload.web_search:
+    if search_context:
         searching_msg = "🔍 Searching through web...\n\n"
         yield f"data: {json.dumps({'token': searching_msg})}\n\n"
 
@@ -162,8 +190,17 @@ async def stream_default_response(payload: DefaultChatRequest, user: User, db: S
         TokenManager.deduct_tokens(user, db, TokenManager.llm_cost(payload.provider, payload.message, full_response))
         yield "data: [DONE]\n\n"
     except Exception as exc:
-        yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        yield f"data: {json.dumps({'error': friendly_default_chat_error(exc)})}\n\n"
         yield "data: [DONE]\n\n"
+
+
+def friendly_default_chat_error(exc: Exception) -> str:
+    text = str(exc)
+    if "404" in text and "Ollama" in text:
+        return "This local model is not available in Ollama. Please choose another free model."
+    if "Ollama" in text:
+        return "Ollama could not answer right now. Please try again or choose another free model."
+    return text
 
 
 @router.post("", response_model=DefaultChatResponse)
@@ -185,7 +222,7 @@ async def default_chat(
     TokenManager.check_balance(current_user, TokenManager.llm_cost(payload.provider, payload.message))
 
     search_context = None
-    if payload.web_search:
+    if should_use_search(payload):
         from app.tools.web_search import WebSearchTool
         tool = WebSearchTool(provider="duckduckgo")
         try:
