@@ -48,6 +48,9 @@ const CODING_MODEL = CHAT_MODELS.find((model) => model.model === 'qwen3:8b') || 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 const getErrorMessage = (details: string) => {
+  if (details.trim().startsWith('<!DOCTYPE') || details.includes('__next_error__')) {
+    return 'Chat API route is not available. Please refresh and try again.';
+  }
   try {
     const parsed = JSON.parse(details);
     if (typeof parsed.detail === 'string') return parsed.detail;
@@ -560,6 +563,12 @@ export default function DefaultChatInterface() {
         throw new Error(getErrorMessage(details) || 'Failed to send message');
       }
 
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('text/event-stream')) {
+        const details = await response.text();
+        throw new Error(getErrorMessage(details) || 'Chat API returned an invalid response.');
+      }
+
       if (!response.body) {
         throw new Error('Backend did not return a response stream');
       }
@@ -591,7 +600,12 @@ export default function DefaultChatInterface() {
             return;
           }
 
-          const parsed = JSON.parse(data);
+          let parsed: any;
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            throw new Error(getErrorMessage(data) || 'Chat API returned an invalid stream.');
+          }
           if (parsed.error) throw new Error(parsed.error);
           if (parsed.token) {
             assistantResponse += parsed.token;
