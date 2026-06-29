@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, CheckCircle, Copy, Inbox, Loader2, Maximize2, Megaphone, Minimize2, PauseCircle, PlayCircle, Save, Search, Send, Settings, Tag, UserPlus, X } from 'lucide-react';
 import AgentIntegrations from './AgentIntegrations';
 
@@ -69,6 +71,20 @@ interface AgentIntegration {
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
 const providers: Provider[] = ['all', 'line', 'telegram', 'facebook'];
 const labelOptions = ['New Lead', 'Need Follow Up', 'Paid', 'Problem', 'VIP'];
+
+function FullscreenPortal({ active, children }: { active: boolean; children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (active && mounted) {
+    return createPortal(children, document.body);
+  }
+
+  return <>{children}</>;
+}
 
 const authHeaders = () => ({
   'Content-Type': 'application/json',
@@ -464,6 +480,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
       ) : (
         <>
           {activeView === 'inbox' && (
+            <FullscreenPortal active={inboxFullscreen}>
             <div className={inboxFullscreen ? 'fixed -inset-px z-[2147483647] m-0 grid h-[calc(100dvh+2px)] w-[calc(100vw+2px)] gap-0 overflow-hidden rounded-none bg-white dark:bg-gray-950 lg:grid-cols-[360px_minmax(0,1fr)]' : 'grid h-[calc(100vh-210px)] min-h-0 overflow-hidden gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]'}>
               <div className={`min-h-0 overflow-hidden bg-white shadow dark:bg-gray-950 ${inboxFullscreen ? 'border-r border-gray-200 shadow-none dark:border-gray-800' : 'rounded-lg'}`}>
                 <div className="border-b border-gray-200 p-4 dark:border-gray-800">
@@ -628,6 +645,7 @@ export default function AgentChannels({ agentId }: { agentId: string }) {
                 )}
               </div>
             </div>
+            </FullscreenPortal>
           )}
 
           {activeView === 'settings' && (
