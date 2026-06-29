@@ -222,6 +222,11 @@ export default function Dashboard() {
 }
 
 function PremiumView({ currentUser }: { currentUser: User | null }) {
+  const [calculatorMode, setCalculatorMode] = useState<'chat' | 'image' | 'video' | 'speech'>('chat');
+  const [calculatorProvider, setCalculatorProvider] = useState<'ollama' | 'openai'>('ollama');
+  const [inputChars, setInputChars] = useState(1200);
+  const [outputChars, setOutputChars] = useState(1200);
+
   const packages = [
     {
       name: 'Starter',
@@ -254,15 +259,30 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
   ];
 
   const usageItems = [
-    { label: 'Normal chat', cost: 'Low token use' },
-    { label: 'PDF / document summary', cost: 'Medium token use' },
-    { label: 'AI Studio image generation', cost: 'Higher token use' },
-    { label: 'Channel auto reply', cost: 'Depends on traffic' },
+    { label: 'Input message', cost: 'Long prompts, old chat history, files, and search results increase cost.' },
+    { label: 'Output answer', cost: 'Longer AI replies cost more because they generate more text.' },
+    { label: 'Model/provider', cost: 'Local Ollama is much cheaper; paid/OpenAI models cost more token credits.' },
+    { label: 'Media generation', cost: 'Image, video, and speech use fixed package credits per generation.' },
   ];
 
   const handlePackageAction = (plan: string) => {
     window.alert(`${plan} checkout is ready to connect. Next step: choose Stripe, manual payment, or your own payment API.`);
   };
+
+  const packageTokenValue = (value: string) => {
+    const normalized = value.toUpperCase().replace(/\s/g, '');
+    if (normalized.endsWith('K')) return Number(normalized.replace('K', '')) * 1000;
+    if (normalized.endsWith('M')) return Number(normalized.replace('M', '')) * 1000000;
+    return Number(normalized.replace(/[^\d]/g, '')) || 0;
+  };
+
+  const chatEstimatedTokens = Math.max(1, Math.floor((inputChars + outputChars) / 4));
+  const chatEstimatedCost = calculatorProvider === 'ollama'
+    ? Math.max(2, Math.floor(chatEstimatedTokens / 100))
+    : Math.max(10, Math.floor(chatEstimatedTokens / 10));
+  const fixedMediaCosts = { image: 500, video: 2000, speech: 200 };
+  const estimatedCost = calculatorMode === 'chat' ? chatEstimatedCost : fixedMediaCosts[calculatorMode];
+  const exampleChatCost = 100;
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
@@ -335,15 +355,73 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
             <div className="mb-4 flex items-center gap-2">
               <Zap className="h-5 w-5 text-primary-500" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Token usage guide</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Token calculator</h2>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {usageItems.map((item) => (
-                <div key={item.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
-                  <p className="font-semibold text-gray-900 dark:text-white">{item.label}</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.cost}</p>
-                </div>
-              ))}
+            <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <div className="space-y-4">
+                <label>
+                  <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Process</span>
+                  <select
+                    value={calculatorMode}
+                    onChange={(event) => setCalculatorMode(event.target.value as typeof calculatorMode)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                  >
+                    <option value="chat">Chat / agent reply</option>
+                    <option value="image">AI image generation</option>
+                    <option value="video">AI video generation</option>
+                    <option value="speech">Text to speech</option>
+                  </select>
+                </label>
+                {calculatorMode === 'chat' && (
+                  <>
+                    <label>
+                      <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Model type</span>
+                      <select
+                        value={calculatorProvider}
+                        onChange={(event) => setCalculatorProvider(event.target.value as typeof calculatorProvider)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                      >
+                        <option value="ollama">Local Ollama model</option>
+                        <option value="openai">Paid/OpenAI model</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Input characters</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={inputChars}
+                        onChange={(event) => setInputChars(Number(event.target.value) || 0)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Output characters</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={outputChars}
+                        onChange={(event) => setOutputChars(Number(event.target.value) || 0)}
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Estimated package cost</p>
+                <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{estimatedCost.toLocaleString()}</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">tokens per request</p>
+                {calculatorMode === 'chat' ? (
+                  <div className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-600 dark:bg-gray-950 dark:text-gray-300">
+                    Estimated text tokens: <span className="font-semibold">{chatEstimatedTokens.toLocaleString()}</span>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-600 dark:bg-gray-950 dark:text-gray-300">
+                    Fixed media cost in current backend: <span className="font-semibold">{estimatedCost.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
@@ -354,6 +432,39 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
             <p className="text-sm leading-6 text-gray-600 dark:text-gray-400">
               This page is ready for packages. The buttons can connect to Stripe, manual payment, or your own payment API next.
             </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">What causes token usage?</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {usageItems.map((item) => (
+                <div key={item.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                  <p className="font-semibold text-gray-900 dark:text-white">{item.label}</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">{item.cost}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Package estimate</h2>
+            <div className="mt-4 space-y-3">
+              {packages.map((item) => {
+                const total = packageTokenValue(item.tokens);
+                return (
+                  <div key={item.name} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-gray-900 dark:text-white">{item.name}</p>
+                      <p className="text-sm font-medium text-primary-600 dark:text-primary-300">{item.tokens}</p>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      About {Math.floor(total / exampleChatCost).toLocaleString()} paid-model chats, {Math.floor(total / fixedMediaCosts.image).toLocaleString()} images, or {Math.floor(total / fixedMediaCosts.video).toLocaleString()} videos.
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
