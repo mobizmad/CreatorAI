@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Bot,
+  Check,
   ChevronRight,
+  CreditCard,
+  Crown,
   Key,
   Loader2,
   LogOut,
@@ -12,11 +15,13 @@ import {
   Moon,
   Plus,
   Search,
+  Sparkles,
   Settings,
   Star,
   Store,
   Sun,
   Wand2,
+  Zap,
 } from 'lucide-react';
 import AIStudio from '@/components/AIStudio';
 import MediaEditor from '@/components/MediaEditor';
@@ -28,7 +33,7 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import { agentAPI, authAPI } from '@/lib/api';
 import type { Agent, User } from '@/lib/types';
 
-type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground';
+type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground' | 'premium';
 
 interface MarketplaceAgent {
   id: string;
@@ -68,7 +73,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const view = searchParams.get('view') as DashboardView | null;
-    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground'].includes(view)) {
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground', 'premium'].includes(view)) {
       setActiveView(view);
     }
   }, [searchParams]);
@@ -202,6 +207,7 @@ export default function Dashboard() {
           />
         )}
         {activeView === 'media-editor' && <MediaEditor />}
+        {activeView === 'premium' && <PremiumView currentUser={currentUser} />}
         {activeView === 'playground' && (
           <DashboardPlaygroundView
             agentId={selectedPlaygroundAgentId || agents[0]?.id || ''}
@@ -211,6 +217,146 @@ export default function Dashboard() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+function PremiumView({ currentUser }: { currentUser: User | null }) {
+  const packages = [
+    {
+      name: 'Starter',
+      price: '$9',
+      tokens: '500K tokens',
+      note: 'For daily chat and light agent testing.',
+      accent: 'border-gray-200',
+      button: 'Buy Starter',
+      features: ['Default chat and agents', 'File summaries', 'Channel inbox access', 'Basic support'],
+    },
+    {
+      name: 'Pro',
+      price: '$29',
+      tokens: '2M tokens',
+      note: 'Best for creators and small teams.',
+      accent: 'border-primary-500 ring-2 ring-primary-100',
+      button: 'Go Premium',
+      popular: true,
+      features: ['More AI Studio usage', 'Priority channel replies', 'Shared channel inbox', 'Advanced OCR/file reading', 'Faster support'],
+    },
+    {
+      name: 'Business',
+      price: '$79',
+      tokens: '8M tokens',
+      note: 'For teams running real customer channels.',
+      accent: 'border-gray-200',
+      button: 'Contact Sales',
+      features: ['Multiple operators', 'Higher channel volume', 'Team-ready agent workflows', 'Custom onboarding'],
+    },
+  ];
+
+  const usageItems = [
+    { label: 'Normal chat', cost: 'Low token use' },
+    { label: 'PDF / document summary', cost: 'Medium token use' },
+    { label: 'AI Studio image generation', cost: 'Higher token use' },
+    { label: 'Channel auto reply', cost: 'Depends on traffic' },
+  ];
+
+  const handlePackageAction = (plan: string) => {
+    window.alert(`${plan} checkout is ready to connect. Next step: choose Stripe, manual payment, or your own payment API.`);
+  };
+
+  return (
+    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6 overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-950">
+          <div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-200">
+                <Crown className="h-4 w-4" />
+                Premium packages
+              </div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upgrade tokens and unlock heavier AI work</h1>
+              <p className="mt-3 max-w-2xl text-gray-600 dark:text-gray-400">
+                Pick a package for more chat, file reading, AI Studio generations, and channel automation.
+              </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Current balance</p>
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                {(currentUser?.token_balance || 0).toLocaleString()}
+              </p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">tokens available</p>
+              <button
+                onClick={() => handlePackageAction('Premium')}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-400 via-pink-500 to-sky-400 px-4 py-3 text-sm font-bold text-white shadow-sm"
+              >
+                <Sparkles className="h-4 w-4" />
+                Go Premium
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          {packages.map((item) => (
+            <div key={item.name} className={`relative rounded-lg border bg-white p-6 shadow-sm dark:bg-gray-950 dark:border-gray-800 ${item.accent}`}>
+              {item.popular && (
+                <span className="absolute right-4 top-4 rounded-full bg-primary-500 px-3 py-1 text-xs font-semibold text-white">
+                  Popular
+                </span>
+              )}
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{item.name}</h2>
+              <div className="mt-4 flex items-end gap-2">
+                <span className="text-4xl font-bold text-gray-900 dark:text-white">{item.price}</span>
+                <span className="pb-1 text-sm text-gray-500">/ package</span>
+              </div>
+              <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                {item.tokens}
+              </p>
+              <p className="mt-3 min-h-[48px] text-sm leading-6 text-gray-600 dark:text-gray-400">{item.note}</p>
+              <button
+                onClick={() => handlePackageAction(item.name)}
+                className={`mt-5 w-full rounded-lg px-4 py-3 text-sm font-bold ${item.popular ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'}`}
+              >
+                {item.button}
+              </button>
+              <div className="mt-5 space-y-3 border-t border-gray-100 pt-5 dark:border-gray-800">
+                {item.features.map((feature) => (
+                  <div key={feature} className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                    <span>{feature}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <div className="mb-4 flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary-500" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Token usage guide</h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {usageItems.map((item) => (
+                <div key={item.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
+                  <p className="font-semibold text-gray-900 dark:text-white">{item.label}</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.cost}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <div className="mb-4 flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary-500" />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Payment status</h2>
+            </div>
+            <p className="text-sm leading-6 text-gray-600 dark:text-gray-400">
+              This page is ready for packages. The buttons can connect to Stripe, manual payment, or your own payment API next.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   Wand2,
   Film,
   Radio,
+  Sparkles,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { agentAPI, authAPI } from '@/lib/api';
@@ -259,6 +260,27 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
             <p className="text-sm font-semibold text-white">{currentUser.token_balance.toLocaleString()}</p>
             <p className="mt-1 truncate text-xs text-gray-400">{currentUser.email}</p>
           </div>
+        )}
+        {!isCollapsed ? (
+          <button
+            onClick={() => handleNavigate('premium')}
+            className="w-full overflow-hidden rounded-lg bg-gradient-to-br from-orange-400 via-pink-500 to-sky-400 px-4 py-4 text-left text-white shadow-sm transition-transform hover:-translate-y-0.5"
+            title="Go Premium"
+          >
+            <div className="flex items-center gap-2 text-sm font-bold">
+              <Sparkles className="h-4 w-4" />
+              Go Premium
+            </div>
+            <p className="mt-1 text-xs leading-5 text-white/90">Upgrade your plan to get more tokens</p>
+          </button>
+        ) : (
+          <button
+            onClick={() => handleNavigate('premium')}
+            className="flex w-full items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 via-pink-500 to-sky-400 px-3 py-2 text-white"
+            title="Go Premium"
+          >
+            <Sparkles className="h-4 w-4" />
+          </button>
         )}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
