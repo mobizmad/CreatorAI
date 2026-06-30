@@ -231,51 +231,53 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
 
   const packages = [
     {
-      name: 'Starter',
-      price: '$9',
-      tokens: '500K tokens',
-      note: 'For daily chat and light agent testing.',
+      name: 'Free',
+      price: '$0',
+      credits: 100000,
+      note: 'For trying local AI chat before upgrading.',
       accent: 'border-gray-200',
-      button: 'Buy Starter',
-      features: ['Default chat and agents', 'File summaries', 'Channel inbox access', 'Basic support'],
+      button: 'Current free plan',
+      features: ['100K credits', 'Local Ollama models', '1 agent', 'Basic file upload', 'Limited channel testing'],
     },
     {
       name: 'Pro',
-      price: '$29',
-      tokens: '2M tokens',
-      note: 'Best for creators and small teams.',
+      price: '$12',
+      credits: 1000000,
+      note: 'Best first paid plan for real daily use.',
       accent: 'border-primary-500 ring-2 ring-primary-100',
       button: 'Go Premium',
       popular: true,
-      features: ['More AI Studio usage', 'Priority channel replies', 'Shared channel inbox', 'Advanced OCR/file reading', 'Faster support'],
+      features: ['1M credits', 'Local models plus GPT-4o-mini', '5 agents', 'PDF/Word/Excel reading', 'LINE/Telegram inbox', 'AI auto-reply'],
     },
     {
       name: 'Business',
-      price: '$79',
-      tokens: '8M tokens',
+      price: '$39',
+      credits: 5000000,
       note: 'For teams running real customer channels.',
       accent: 'border-gray-200',
+      button: 'Upgrade Business',
+      features: ['5M credits', 'Local models plus GPT-4o-mini', '20 agents', 'Multiple channels', 'Shared channel inbox', 'Leads and labels'],
+    },
+    {
+      name: 'Agency',
+      price: '$79',
+      credits: 15000000,
+      note: 'For agencies managing multiple clients.',
+      accent: 'border-gray-200',
       button: 'Contact Sales',
-      features: ['Multiple operators', 'Higher channel volume', 'Team-ready agent workflows', 'Custom onboarding'],
+      features: ['15M credits', 'Multiple brands or clients', 'Team/operator access', 'Higher automation limits', 'Priority setup support'],
     },
   ];
 
   const usageItems = [
-    { label: 'Input message', cost: 'Long prompts, old chat history, files, and search results increase cost.' },
-    { label: 'Output answer', cost: 'Longer AI replies cost more because they generate more text.' },
-    { label: 'Model/provider', cost: 'Local Ollama is much cheaper; paid/OpenAI models cost more token credits.' },
-    { label: 'Media generation', cost: 'Image, video, and speech use fixed package credits per generation.' },
+    { label: 'Input message', cost: 'Long prompts, old chat history, files, and search results use more credits.' },
+    { label: 'Output answer', cost: 'Longer AI replies use more credits because they generate more text.' },
+    { label: 'Model/provider', cost: 'Local Ollama models are cheaper. GPT-4o-mini uses more credits and should be paid-plan only.' },
+    { label: 'Media generation', cost: 'Image, video, and speech use fixed credits per generation.' },
   ];
 
   const handlePackageAction = (plan: string) => {
     window.alert(`${plan} checkout is ready to connect. Next step: choose Stripe, manual payment, or your own payment API.`);
-  };
-
-  const packageTokenValue = (value: string) => {
-    const normalized = value.toUpperCase().replace(/\s/g, '');
-    if (normalized.endsWith('K')) return Number(normalized.replace('K', '')) * 1000;
-    if (normalized.endsWith('M')) return Number(normalized.replace('M', '')) * 1000000;
-    return Number(normalized.replace(/[^\d]/g, '')) || 0;
   };
 
   const chatEstimatedTokens = Math.max(1, Math.floor((inputChars + outputChars) / 4));
@@ -296,9 +298,9 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
                 <Crown className="h-4 w-4" />
                 Premium packages
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upgrade tokens and unlock heavier AI work</h1>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Upgrade credits and unlock heavier AI work</h1>
               <p className="mt-3 max-w-2xl text-gray-600 dark:text-gray-400">
-                Pick a package for more chat, file reading, AI Studio generations, and channel automation.
+                Local models use fewer credits. GPT-4o-mini, file reading, media generation, and channel automation use more.
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
@@ -306,7 +308,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
               <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                 {(currentUser?.token_balance || 0).toLocaleString()}
               </p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">tokens available</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">credits available</p>
               <button
                 onClick={() => handlePackageAction('Premium')}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-400 via-pink-500 to-sky-400 px-4 py-3 text-sm font-bold text-white shadow-sm"
@@ -318,7 +320,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-4">
           {packages.map((item) => (
             <div key={item.name} className={`relative rounded-lg border bg-white p-6 shadow-sm dark:bg-gray-950 dark:border-gray-800 ${item.accent}`}>
               {item.popular && (
@@ -332,7 +334,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
                 <span className="pb-1 text-sm text-gray-500">/ package</span>
               </div>
               <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">
-                {item.tokens}
+                {item.credits.toLocaleString()} credits
               </p>
               <p className="mt-3 min-h-[48px] text-sm leading-6 text-gray-600 dark:text-gray-400">{item.note}</p>
               <button
@@ -357,7 +359,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
             <div className="mb-4 flex items-center gap-2">
               <Zap className="h-5 w-5 text-primary-500" />
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Token calculator</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Credit calculator</h2>
             </div>
             <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
               <div className="space-y-4">
@@ -383,8 +385,8 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
                         onChange={(event) => setCalculatorProvider(event.target.value as typeof calculatorProvider)}
                         className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                       >
-                        <option value="ollama">Local Ollama model</option>
-                        <option value="openai">Paid/OpenAI model</option>
+                        <option value="ollama">Local Ollama model: gemma, llama, qwen, llava</option>
+                        <option value="openai">Paid model: GPT-4o-mini</option>
                       </select>
                     </label>
                     <label>
@@ -413,7 +415,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 dark:border-gray-800 dark:bg-gray-900">
                 <p className="text-sm text-gray-500 dark:text-gray-400">Estimated package cost</p>
                 <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{estimatedCost.toLocaleString()}</p>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">tokens per request</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">credits per request</p>
                 {calculatorMode === 'chat' ? (
                   <div className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-600 dark:bg-gray-950 dark:text-gray-300">
                     Estimated text tokens: <span className="font-semibold">{chatEstimatedTokens.toLocaleString()}</span>
@@ -439,7 +441,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">What causes token usage?</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">What uses credits?</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {usageItems.map((item) => (
                 <div key={item.label} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
@@ -453,12 +455,12 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Package estimate</h2>
             <div className="mt-4 space-y-3">
               {packages.map((item) => {
-                const total = packageTokenValue(item.tokens);
+                const total = item.credits;
                 return (
                   <div key={item.name} className="rounded-lg border border-gray-200 p-4 dark:border-gray-800">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-gray-900 dark:text-white">{item.name}</p>
-                      <p className="text-sm font-medium text-primary-600 dark:text-primary-300">{item.tokens}</p>
+                      <p className="text-sm font-medium text-primary-600 dark:text-primary-300">{item.credits.toLocaleString()} credits</p>
                     </div>
                     <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                       About {Math.floor(total / exampleChatCost).toLocaleString()} paid-model chats, {Math.floor(total / fixedMediaCosts.image).toLocaleString()} images, or {Math.floor(total / fixedMediaCosts.video).toLocaleString()} videos.

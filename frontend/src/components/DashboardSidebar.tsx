@@ -256,7 +256,7 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
       <div className="p-3 border-t border-white/10 space-y-2">
         {currentUser && !isCollapsed && (
           <div className="rounded-lg bg-white/5 px-3 py-2">
-            <p className="text-xs text-gray-400">Tokens</p>
+            <p className="text-xs text-gray-400">Credits</p>
             <p className="text-sm font-semibold text-white">{currentUser.token_balance.toLocaleString()}</p>
             <p className="mt-1 truncate text-xs text-gray-400">{currentUser.email}</p>
           </div>
@@ -271,7 +271,7 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
               <Sparkles className="h-4 w-4" />
               Go Premium
             </div>
-            <p className="mt-1 text-xs leading-5 text-white/90">Upgrade your plan to get more tokens</p>
+            <p className="mt-1 text-xs leading-5 text-white/90">Upgrade your plan to get more credits</p>
           </button>
         ) : (
           <button
