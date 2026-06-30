@@ -19,6 +19,10 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     token_balance: int = 100000
+    plan_name: str = "free"
+    monthly_credit_limit: int = 100000
+    subscription_status: str = "free"
+    plan_expires_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

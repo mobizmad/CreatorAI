@@ -67,6 +67,7 @@ async def public_chat(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found",
         )
+    TokenManager.check_paid_model_access(agent.user, agent.llm_provider)
     TokenManager.check_balance(agent.user, TokenManager.llm_cost(agent.llm_provider, request.message))
 
     # Resolve session
@@ -134,6 +135,14 @@ async def public_chat(
 
         TokenManager.check_balance(agent.user, usage_cost)
         agent.user.token_balance -= usage_cost
+        TokenManager.record_usage(
+            agent.user,
+            db,
+            usage_cost,
+            action="Public API chat",
+            provider=agent.llm_provider,
+            model=agent.llm_model,
+        )
         db.add(agent.user)
         db.commit()
 

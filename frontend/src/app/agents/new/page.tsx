@@ -51,8 +51,8 @@ export default function NewAgentPage() {
     description: '',
     system_prompt: '',
     output_template: '',
-    llm_provider: 'openai',
-    llm_model: 'gpt-4',
+    llm_provider: 'ollama',
+    llm_model: 'gemma4:latest',
     temperature: 0.7,
     enabled_tools: [] as string[],
     tool_settings: {} as Record<string, Record<string, string>>,
@@ -150,11 +150,14 @@ export default function NewAgentPage() {
         },
         body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error('Failed to create agent');
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to create agent');
+      }
       const agent = await response.json();
       router.push(`/agents/${agent.id}/playground`);
     } catch (err) {
-      alert('Failed to create agent');
+      alert(err instanceof Error ? err.message : 'Failed to create agent');
     } finally {
       setIsCreating(false);
     }

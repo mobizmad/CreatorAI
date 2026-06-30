@@ -34,6 +34,17 @@ def ensure_schema_updates():
             user_columns = {column["name"] for column in inspector.get_columns("users")}
             if "token_balance" not in user_columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN token_balance INTEGER NOT NULL DEFAULT 100000"))
+            user_additions = {
+                "plan_name": "VARCHAR NOT NULL DEFAULT 'free'",
+                "monthly_credit_limit": "INTEGER NOT NULL DEFAULT 100000",
+                "subscription_status": "VARCHAR NOT NULL DEFAULT 'free'",
+                "stripe_customer_id": "VARCHAR",
+                "stripe_subscription_id": "VARCHAR",
+                "plan_expires_at": "TIMESTAMP",
+            }
+            for column_name, column_type in user_additions.items():
+                if column_name not in user_columns:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"))
 
         if "ai_studio_generations" in table_names:
             studio_columns = {column["name"] for column in inspector.get_columns("ai_studio_generations")}

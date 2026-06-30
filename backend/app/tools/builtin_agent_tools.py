@@ -222,7 +222,7 @@ async def generate_agent_image(db: Session, agent: Agent, prompt: str) -> Dict[s
     db.add(generation)
     db.commit()
     db.refresh(generation)
-    TokenManager.deduct_tokens(user, db, cost)
+    TokenManager.deduct_tokens(user, db, cost, action="Agent image tool", provider="fal/local", model=model_id)
 
     image_urls = [item["url"] for item in media if item.get("type") == "image" and item.get("url")]
     return {

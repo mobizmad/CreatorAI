@@ -17,6 +17,7 @@ import {
   Film,
   Radio,
   Sparkles,
+  Receipt,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { agentAPI, authAPI } from '@/lib/api';
@@ -192,6 +193,18 @@ export default function DashboardSidebar({ activeViewOverride, onNavigate }: Das
                 </span>
               </>
             )}
+          </button>
+          <button
+            onClick={() => handleNavigate('billing')}
+            title="Billing"
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} rounded-lg px-3 py-2 text-sm transition-colors ${
+              activeView === 'billing' && pathname === '/dashboard'
+                ? 'bg-white text-gray-950'
+                : 'text-gray-300 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            {!isCollapsed && 'Billing'}
           </button>
         </nav>
 

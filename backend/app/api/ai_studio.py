@@ -445,7 +445,7 @@ async def execute_studio_generation_job(generation_id: UUID, user_id: UUID, payl
 
         result = provider_response["result"]
         media = collect_media(result)
-        TokenManager.deduct_tokens(user, db, cost)
+        TokenManager.deduct_tokens(user, db, cost, action="AI Studio generation", provider="fal/local", model=model.id)
 
         generation.media = media
         generation.result = {**result, "status": "completed"}
@@ -548,7 +548,7 @@ async def generate_studio_media(
     result = fal_response["result"]
     media = collect_media(result)
 
-    TokenManager.deduct_tokens(current_user, db, cost)
+    TokenManager.deduct_tokens(current_user, db, cost, action="AI Studio generation", provider="fal", model=model.id)
 
     generation = AIStudioGeneration(
         user_id=current_user.id,

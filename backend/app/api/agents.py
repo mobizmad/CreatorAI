@@ -45,6 +45,7 @@ from app.schemas.schemas import (
     ChannelMessageResponse,
 )
 from app.api.auth import get_current_user
+from app.services.token_service import TokenManager
 from app.tools.builtin_agent_tools import BUILTIN_TOOL_DEFINITIONS
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
@@ -159,6 +160,10 @@ async def create_agent(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new agent"""
+    current_agent_count = db.query(Agent).filter(Agent.user_id == current_user.id).count()
+    TokenManager.check_agent_limit(current_user, current_agent_count)
+    TokenManager.check_paid_model_access(current_user, agent_data.llm_provider)
+
     new_agent = Agent(
         user_id=current_user.id,
         name=agent_data.name,

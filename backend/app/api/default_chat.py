@@ -208,7 +208,14 @@ async def stream_default_response(payload: DefaultChatRequest, user: User, db: S
             full_response += token
             yield f"data: {json.dumps({'token': token})}\n\n"
             await asyncio.sleep(0)
-        TokenManager.deduct_tokens(user, db, TokenManager.llm_cost(payload.provider, payload.message, full_response))
+        TokenManager.deduct_tokens(
+            user,
+            db,
+            TokenManager.llm_cost(payload.provider, payload.message, full_response),
+            action="Default chat",
+            provider=payload.provider,
+            model=payload.model,
+        )
         yield "data: [DONE]\n\n"
     except Exception as exc:
         yield f"data: {json.dumps({'error': friendly_default_chat_error(exc)})}\n\n"
@@ -240,6 +247,7 @@ async def default_chat(
             detail="Message is required",
         )
 
+    TokenManager.check_paid_model_access(current_user, payload.provider)
     TokenManager.check_balance(current_user, TokenManager.llm_cost(payload.provider, payload.message))
 
     search_context = None
@@ -271,7 +279,14 @@ async def default_chat(
 
     try:
         response = await gateway.generate(build_messages(payload, search_context))
-        TokenManager.deduct_tokens(current_user, db, TokenManager.llm_cost(payload.provider, payload.message, response))
+        TokenManager.deduct_tokens(
+            current_user,
+            db,
+            TokenManager.llm_cost(payload.provider, payload.message, response),
+            action="Default chat",
+            provider=payload.provider,
+            model=payload.model,
+        )
         return DefaultChatResponse(response=response)
     except HTTPException:
         raise

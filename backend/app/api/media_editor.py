@@ -321,7 +321,7 @@ async def generate_media_for_project(
     if not generated_media:
         raise HTTPException(status_code=502, detail=f"AI Studio did not return {payload.type} media")
     stored_url = await store_generated_media(generated_media["url"], payload.type, request, current_user, project)
-    TokenManager.deduct_tokens(current_user, db, cost)
+    TokenManager.deduct_tokens(current_user, db, cost, action="Media editor generation", provider="fal", model=model.id)
 
     generation = AIStudioGeneration(
         user_id=current_user.id,

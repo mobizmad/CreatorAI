@@ -33,7 +33,7 @@ import DashboardSidebar from '@/components/DashboardSidebar';
 import { agentAPI, authAPI } from '@/lib/api';
 import type { Agent, User } from '@/lib/types';
 
-type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground' | 'premium';
+type DashboardView = 'chat' | 'agents' | 'marketplace' | 'studio' | 'channels' | 'media-editor' | 'playground' | 'premium' | 'billing';
 
 interface MarketplaceAgent {
   id: string;
@@ -78,7 +78,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const view = searchParams.get('view') as DashboardView | null;
-    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground', 'premium'].includes(view)) {
+    if (view && ['chat', 'agents', 'marketplace', 'studio', 'channels', 'media-editor', 'playground', 'premium', 'billing'].includes(view)) {
       setActiveView(view);
     }
   }, [searchParams]);
@@ -214,6 +214,7 @@ export default function Dashboard() {
         )}
         {activeView === 'media-editor' && <MediaEditor />}
         {activeView === 'premium' && <PremiumView currentUser={currentUser} />}
+        {activeView === 'billing' && <BillingView currentUser={currentUser} />}
         {activeView === 'playground' && (
           <DashboardPlaygroundView
             agentId={selectedPlaygroundAgentId || agents[0]?.id || ''}
@@ -473,6 +474,170 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
                 );
               })}
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface BillingSummary {
+  plan_name: string;
+  subscription_status: string;
+  credit_balance: number;
+  monthly_credit_limit: number;
+  plan_expires_at?: string | null;
+  limits: {
+    credits: number;
+    agents: number;
+    channel_replies: number;
+    paid_models: boolean;
+  };
+  used_last_30_days: number;
+}
+
+interface CreditUsageItem {
+  id: string;
+  amount: number;
+  action: string;
+  provider?: string | null;
+  model?: string | null;
+  note?: string | null;
+  created_at: string;
+}
+
+function BillingView({ currentUser }: { currentUser: User | null }) {
+  const [summary, setSummary] = useState<BillingSummary | null>(null);
+  const [usage, setUsage] = useState<CreditUsageItem[]>([]);
+  const [isLoadingBilling, setIsLoadingBilling] = useState(true);
+
+  useEffect(() => {
+    const loadBilling = async () => {
+      setIsLoadingBilling(true);
+      try {
+        const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+        const [summaryResponse, usageResponse] = await Promise.all([
+          fetch(`${API}/billing/summary`, { headers }),
+          fetch(`${API}/billing/usage`, { headers }),
+        ]);
+        if (summaryResponse.ok) setSummary(await summaryResponse.json());
+        if (usageResponse.ok) setUsage(await usageResponse.json());
+      } finally {
+        setIsLoadingBilling(false);
+      }
+    };
+    loadBilling();
+  }, []);
+
+  const activeSummary = summary || {
+    plan_name: currentUser?.plan_name || 'free',
+    subscription_status: currentUser?.subscription_status || 'free',
+    credit_balance: currentUser?.token_balance || 0,
+    monthly_credit_limit: currentUser?.monthly_credit_limit || 100000,
+    limits: { credits: 100000, agents: 1, channel_replies: 100, paid_models: false },
+    used_last_30_days: 0,
+  };
+
+  const usagePercent = Math.min(100, Math.round((activeSummary.used_last_30_days / Math.max(1, activeSummary.monthly_credit_limit)) * 100));
+
+  return (
+    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Billing & Usage</h1>
+            <p className="mt-1 text-gray-600 dark:text-gray-400">Track credits, plan limits, and recent AI usage.</p>
+          </div>
+          <button
+            onClick={() => window.location.assign('/dashboard?view=premium')}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-400 via-pink-500 to-sky-400 px-4 py-2.5 text-sm font-bold text-white"
+          >
+            <Sparkles className="h-4 w-4" />
+            Go Premium
+          </button>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-4">
+          <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-gray-950">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Current plan</p>
+            <p className="mt-2 text-2xl font-bold capitalize text-gray-900 dark:text-white">{activeSummary.plan_name}</p>
+            <p className="mt-1 text-sm capitalize text-gray-500">{activeSummary.subscription_status}</p>
+          </div>
+          <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-gray-950">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Credits left</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{activeSummary.credit_balance.toLocaleString()}</p>
+            <p className="mt-1 text-sm text-gray-500">available now</p>
+          </div>
+          <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-gray-950">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Used this period</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{activeSummary.used_last_30_days.toLocaleString()}</p>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+              <div className="h-full rounded-full bg-primary-500" style={{ width: `${usagePercent}%` }} />
+            </div>
+          </div>
+          <div className="rounded-lg bg-white p-5 shadow-sm dark:bg-gray-950">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Paid models</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{activeSummary.limits.paid_models ? 'Unlocked' : 'Locked'}</p>
+            <p className="mt-1 text-sm text-gray-500">GPT-4o-mini</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Plan limits</h2>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+                <span className="text-gray-500">Agents</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{activeSummary.limits.agents}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+                <span className="text-gray-500">Channel replies/month</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{activeSummary.limits.channel_replies.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+                <span className="text-gray-500">Monthly credits</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{activeSummary.monthly_credit_limit.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">GPT-4o-mini</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{activeSummary.limits.paid_models ? 'Yes' : 'Upgrade required'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-950">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Credit history</h2>
+              {isLoadingBilling && <Loader2 className="h-4 w-4 animate-spin text-primary-500" />}
+            </div>
+            {usage.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-200 py-12 text-center text-sm text-gray-500 dark:border-gray-800">
+                No credit usage recorded yet. New chat and media usage will appear here.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-900">
+                    <tr>
+                      <th className="px-4 py-3">Action</th>
+                      <th className="px-4 py-3">Model</th>
+                      <th className="px-4 py-3 text-right">Credits</th>
+                      <th className="px-4 py-3">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {usage.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{item.action}</td>
+                        <td className="px-4 py-3 text-gray-500">{[item.provider, item.model].filter(Boolean).join(' / ') || '-'}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-900 dark:text-white">{item.amount.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-gray-500">{new Date(item.created_at).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>

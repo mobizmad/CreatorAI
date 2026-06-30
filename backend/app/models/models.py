@@ -16,9 +16,31 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     token_balance = Column(Integer, default=100000, nullable=False)
+    plan_name = Column(String, default="free", nullable=False)
+    monthly_credit_limit = Column(Integer, default=100000, nullable=False)
+    subscription_status = Column(String, default="free", nullable=False)
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    plan_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     agents = relationship("Agent", back_populates="user", cascade="all, delete-orphan")
+    credit_usages = relationship("CreditUsage", back_populates="user", cascade="all, delete-orphan")
+
+
+class CreditUsage(Base):
+    __tablename__ = "credit_usages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    action = Column(String, nullable=False)
+    provider = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="credit_usages")
 
 
 class Agent(Base):

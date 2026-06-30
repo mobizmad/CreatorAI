@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     AgentResponse,
 )
 from app.api.auth import get_current_user
+from app.services.token_service import TokenManager
 from app.tools.builtin_agent_tools import BUILTIN_TOOL_DEFINITIONS
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
@@ -71,6 +72,10 @@ async def create_agent_from_template(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Template not found"
         )
+
+    current_agent_count = db.query(Agent).filter(Agent.user_id == current_user.id).count()
+    TokenManager.check_agent_limit(current_user, current_agent_count)
+    TokenManager.check_paid_model_access(current_user, request.llm_provider or template.llm_provider)
     
     # Create agent from template with user customizations
     agent = Agent(

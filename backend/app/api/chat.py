@@ -277,7 +277,14 @@ async def stream_response(
             db.refresh(chat_log)
             message_id = str(chat_log.id)
             
-        TokenManager.deduct_tokens(user, db, TokenManager.llm_cost(executor.agent.llm_provider, message, full_response))
+        TokenManager.deduct_tokens(
+            user,
+            db,
+            TokenManager.llm_cost(executor.agent.llm_provider, message, full_response),
+            action="Agent chat",
+            provider=executor.agent.llm_provider,
+            model=executor.agent.llm_model,
+        )
 
         # Send final sources and session metadata
         yield f"data: {json.dumps({'token': '', 'sources': sources, 'session_id': str(session_id), 'message_id': message_id})}\n\n"
@@ -331,6 +338,7 @@ async def chat_with_agent(
         session_id = session.id
 
     minimum_cost = TokenManager.llm_cost(agent.llm_provider, message.message)
+    TokenManager.check_paid_model_access(current_user, agent.llm_provider)
     TokenManager.check_balance(current_user, minimum_cost)
 
     try:
@@ -414,7 +422,14 @@ async def chat_with_agent(
         db.commit()
         db.refresh(chat_log)
 
-        TokenManager.deduct_tokens(current_user, db, TokenManager.llm_cost(agent.llm_provider, message.message, result["response"]))
+        TokenManager.deduct_tokens(
+            current_user,
+            db,
+            TokenManager.llm_cost(agent.llm_provider, message.message, result["response"]),
+            action="Agent chat",
+            provider=agent.llm_provider,
+            model=agent.llm_model,
+        )
 
         return ChatResponse(
             response=result["response"],
