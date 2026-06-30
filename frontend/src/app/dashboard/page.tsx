@@ -65,6 +65,11 @@ export default function Dashboard() {
   const [selectedPlaygroundAgentId, setSelectedPlaygroundAgentId] = useState('');
 
   useEffect(() => {
+    if (!localStorage.getItem('token')) {
+      router.push('/');
+      setIsLoading(false);
+      return;
+    }
     loadAgents();
     loadCurrentUser();
     const interval = setInterval(loadAgents, 30000);
@@ -106,7 +111,10 @@ export default function Dashboard() {
       setAgents(data);
     } catch (err) {
       console.error('Failed to load agents:', err);
-      if ((err as any).response?.status === 401) router.push('/');
+      if ((err as any).response?.status === 401) {
+        localStorage.removeItem('token');
+        router.push('/');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -134,6 +142,10 @@ export default function Dashboard() {
       setCurrentUser(await authAPI.getMe());
     } catch (err) {
       console.error('Failed to load user:', err);
+      if ((err as any).response?.status === 401) {
+        localStorage.removeItem('token');
+        router.push('/');
+      }
     }
   };
 
