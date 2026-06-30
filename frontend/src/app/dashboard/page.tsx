@@ -56,7 +56,7 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState<DashboardView>('chat');
   const [agents, setAgents] = useState<Agent[]>([]);
   const [marketplaceAgents, setMarketplaceAgents] = useState<MarketplaceAgent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isMarketplaceLoading, setIsMarketplaceLoading] = useState(false);
   const [marketplaceSearch, setMarketplaceSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -162,14 +162,6 @@ export default function Dashboard() {
     localStorage.removeItem('token');
     router.push('/');
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="h-screen flex overflow-hidden bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100">
