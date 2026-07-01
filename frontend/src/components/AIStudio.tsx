@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
+  ChevronDown,
   Clock3,
   Download,
   ExternalLink,
@@ -94,6 +95,36 @@ function modelOptionLabel(model: StudioModel) {
   return model.price_label ? `${model.label} - ${model.price_label}` : model.label;
 }
 
+function getModelBrand(model?: StudioModel) {
+  const id = model?.id.toLowerCase() || '';
+  const label = model?.label.toLowerCase() || '';
+  if (id.includes('openai') || label.includes('gpt')) return { text: '◎', color: 'text-gray-950', bg: 'bg-white' };
+  if (id.includes('nano') || label.includes('nano')) return { text: '✦', color: 'text-blue-600', bg: 'bg-white' };
+  if (id.includes('flux') || label.includes('flux')) return { text: '△', color: 'text-gray-950', bg: 'bg-white' };
+  if (id.includes('kling') || label.includes('kling')) return { text: 'K', color: 'text-purple-600', bg: 'bg-purple-50' };
+  if (id.includes('seedance') || label.includes('seedance')) return { text: 'S', color: 'text-sky-600', bg: 'bg-sky-50' };
+  if (id.includes('minimax') || label.includes('music') || model?.type === 'speech') return { text: '♪', color: 'text-pink-600', bg: 'bg-pink-50' };
+  if (id.includes('local') || label.includes('local') || label.includes('stable diffusion')) return { text: '◆', color: 'text-emerald-600', bg: 'bg-emerald-50' };
+  return { text: 'M', color: 'text-primary-600', bg: 'bg-primary-50' };
+}
+
+function getModelCreditLabel(model?: StudioModel) {
+  if (!model) return 'select a model';
+  if (model.price_label?.includes('local')) return 'local credits';
+  if (model.type === 'image') return model.mode === 'image-edit' ? '800 credits' : '500 credits';
+  if (model.type === 'video') return '2,000+ credits';
+  return '200 credits';
+}
+
+function ModelMark({ model }: { model?: StudioModel }) {
+  const brand = getModelBrand(model);
+  return (
+    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base font-black ${brand.bg} ${brand.color}`}>
+      {brand.text}
+    </span>
+  );
+}
+
 function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -119,6 +150,7 @@ export default function AIStudio() {
   const [templateSort, setTemplateSort] = useState<TemplateSort>('popular');
   const [selectedType, setSelectedType] = useState<StudioType>('image');
   const [selectedModelId, setSelectedModelId] = useState('');
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -169,6 +201,7 @@ export default function AIStudio() {
     if (!filteredModels.some((model) => model.id === selectedModelId)) {
       setSelectedModelId(filteredModels[0]?.id || '');
     }
+    setIsModelMenuOpen(false);
   }, [filteredModels, selectedModelId]);
 
   useEffect(() => {
@@ -354,6 +387,8 @@ export default function AIStudio() {
   }[selectedType];
 
   const ActiveIcon = typeIcon;
+  const typeLabel = selectedType === 'speech' ? 'music' : selectedType;
+  const selectedModelCreditLabel = getModelCreditLabel(selectedModel);
   const selectedOptions = selectedModel?.options || {};
   const hasImageControls =
     selectedType === 'image' &&
@@ -373,12 +408,12 @@ export default function AIStudio() {
     );
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-7xl px-6 py-8">
+    <div className="h-full overflow-y-auto bg-[#f3efff]">
+      <div className="mx-auto max-w-7xl px-4 py-5 lg:px-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">AI Studio</h1>
-            <p className="mt-1 text-gray-600">Generate, save, publish, and remix creative AI outputs.</p>
+            <h1 className="text-3xl font-bold text-gray-900">AI Studio</h1>
+            <p className="mt-1 text-gray-600">Turn ideas into AI visuals, videos, and music.</p>
           </div>
           <div className="flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
             {[
@@ -401,60 +436,102 @@ export default function AIStudio() {
         </div>
 
         {activeTab === 'create' && (
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px_1fr]">
-            <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-5 grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[440px_1fr]">
+            <section className="rounded-[24px] bg-white p-7 shadow-sm">
+              <div className="mb-7">
+                <h2 className="text-4xl font-bold tracking-tight text-gray-900">AI Studio</h2>
+                <p className="mt-3 text-lg leading-8 text-gray-600">Turn ideas into stunning AI visuals, videos, and music.</p>
+              </div>
+
+              <div className="mb-5 grid grid-cols-3 rounded-[22px] bg-gray-100 p-1.5">
                 {(['image', 'video', 'speech'] as StudioType[]).map((type) => {
                   const Icon = type === 'image' ? ImageIcon : type === 'video' ? Play : Music;
+                  const label = type === 'speech' ? 'Music' : type[0].toUpperCase() + type.slice(1);
                   return (
                     <button
                       key={type}
                       onClick={() => setSelectedType(type)}
-                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                      className={`flex min-h-[54px] items-center justify-center gap-2 rounded-[18px] px-3 py-2 text-base font-medium transition-colors ${
                         selectedType === type
-                          ? 'border-primary-500 bg-primary-500 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                          ? 'bg-white text-gray-950 shadow-sm'
+                          : 'text-gray-700 hover:bg-white/60'
                       }`}
                     >
-                      <Icon className="h-4 w-4" />
-                      {type}
+                      <Icon className="h-5 w-5" />
+                      {label}
                     </button>
                   );
                 })}
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Model</label>
-                  <select
-                    value={selectedModel?.id || ''}
-                    onChange={(event) => setSelectedModelId(event.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    {filteredModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {modelOptionLabel(model)}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedModel?.price_label && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {selectedModel.price_label}
-                      {selectedModel.price_note ? ` - ${selectedModel.price_note}` : ''}
-                    </p>
-                  )}
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  Generating {selectedType === 'speech' ? 'music/audio' : `a ${typeLabel}`}:
+                  <span className="font-bold text-gray-800"> {selectedModelCreditLabel}</span>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                  <label className="mb-2 block text-sm font-bold text-gray-700">Model</label>
+                  <div
+                    className="relative"
+                    tabIndex={0}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        setIsModelMenuOpen(false);
+                      }
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setIsModelMenuOpen((open) => !open)}
+                      className={`flex min-h-[58px] w-full items-center justify-between rounded-[18px] border bg-white px-4 text-left text-base transition-colors ${
+                        isModelMenuOpen ? 'border-gray-950 ring-2 ring-gray-950/5' : 'border-gray-300 hover:border-gray-500'
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <ModelMark model={selectedModel} />
+                        <span className="truncate font-medium text-gray-900">{selectedModel?.label || 'Select model'}</span>
+                      </span>
+                      <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isModelMenuOpen && (
+                      <div className="absolute left-0 right-0 z-20 mt-2 max-h-[420px] overflow-y-auto rounded-[18px] border border-gray-100 bg-white/95 p-2 shadow-2xl backdrop-blur">
+                        {filteredModels.map((model) => (
+                          <button
+                            key={model.id}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setSelectedModelId(model.id);
+                              setIsModelMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
+                              selectedModel?.id === model.id ? 'bg-gray-100' : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <ModelMark model={model} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-base font-medium text-gray-900">{model.label}</span>
+                              {model.price_label && <span className="block truncate text-xs text-gray-500">{model.price_label}</span>}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-gray-700">
                     {selectedType === 'speech' ? 'Text' : 'Prompt'}
                   </label>
                   <textarea
                     value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
-                    rows={7}
-                    placeholder={selectedType === 'speech' ? 'Type the speech text...' : 'Describe what you want to create...'}
-                    className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary-500"
+                    rows={8}
+                    placeholder={selectedType === 'speech' ? 'Type the speech text...' : 'Describe the scene you imagine'}
+                    className="w-full resize-none rounded-[18px] border border-gray-300 px-4 py-4 text-base outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
 
@@ -498,7 +575,12 @@ export default function AIStudio() {
                 )}
 
                 {hasImageControls && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-[18px] border border-gray-200 p-4">
+                    <div className="mb-4 flex items-center gap-2 text-base font-bold text-gray-700">
+                      <SlidersHorizontal className="h-5 w-5" />
+                      Advanced Setting
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {selectedOptions.image_sizes?.length ? (
                       <SelectField label="Size" value={imageSize} onChange={setImageSize} options={selectedOptions.image_sizes} />
                     ) : null}
@@ -511,11 +593,17 @@ export default function AIStudio() {
                     {selectedModel?.supports_prompt_adherence ? (
                       <SelectField label="Prompt Match" value={promptAdherence} onChange={(value) => setPromptAdherence(value as 'relaxed' | 'balanced' | 'strict')} options={['strict', 'balanced', 'relaxed']} />
                     ) : null}
+                    </div>
                   </div>
                 )}
 
                 {hasVideoControls && (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-[18px] border border-gray-200 p-4">
+                    <div className="mb-4 flex items-center gap-2 text-base font-bold text-gray-700">
+                      <SlidersHorizontal className="h-5 w-5" />
+                      Advanced Setting
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {selectedOptions.aspect_ratios?.length ? (
                       <SelectField label="Aspect" value={aspectRatio} onChange={setAspectRatio} options={selectedOptions.aspect_ratios} />
                     ) : null}
@@ -536,6 +624,7 @@ export default function AIStudio() {
                         Generate audio
                       </label>
                     ) : null}
+                    </div>
                   </div>
                 )}
 
@@ -551,7 +640,7 @@ export default function AIStudio() {
                   </div>
                 )}
 
-                {selectedOptions.qualities?.length ? (
+                {selectedOptions.qualities?.length && !hasImageControls ? (
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Quality</label>
                     <select
@@ -592,10 +681,15 @@ export default function AIStudio() {
                 <button
                   onClick={handleGenerate}
                   disabled={isLoading || !prompt.trim() || !selectedModel}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-h-[64px] w-full items-center justify-center gap-3 rounded-full bg-gray-100 px-5 text-xl font-bold text-gray-700 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                  {isLoading ? 'Generating...' : 'Generate'}
+                  {isLoading ? 'Generating...' : (
+                    <>
+                      Generate
+                      <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-600">{selectedModelCreditLabel}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </section>
