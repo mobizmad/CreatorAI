@@ -60,6 +60,8 @@ class StudioModel(BaseModel):
     image_input_field: Optional[str] = None
     supports_prompt_adherence: bool = False
     supports_generate_audio: bool = False
+    supports_seed: bool = False
+    credit_note: Optional[str] = None
 
 
 class StudioGenerateRequest(BaseModel):
@@ -75,6 +77,17 @@ class StudioGenerateRequest(BaseModel):
     seed: Optional[int] = None
     prompt_adherence: Optional[Literal["relaxed", "balanced", "strict"]] = None
     generate_audio: Optional[bool] = None
+
+
+class StudioCostEstimateRequest(StudioGenerateRequest):
+    prompt: str = ""
+
+
+class StudioCostEstimateResponse(BaseModel):
+    credits: int
+    usd_estimate: float
+    label: str
+    note: str
 
 
 class StudioGenerateResponse(BaseModel):
@@ -138,9 +151,11 @@ STUDIO_MODELS: List[StudioModel] = [
         type="image",
         mode="local-text-to-image",
         price_label="local, no fal cost",
+        credit_note="0 credits when using your local image service.",
         options={"aspect_ratios": LOCAL_IMAGE_ASPECT_RATIOS, "resolutions": LOCAL_IMAGE_RESOLUTIONS, "qualities": ["low", "medium", "high"]},
         defaults={"aspect_ratio": "1:1", "resolution": "768", "quality": "medium"},
         supports_prompt_adherence=True,
+        supports_seed=True,
     ),
     StudioModel(
         id="openai/gpt-image-2",
@@ -149,6 +164,7 @@ STUDIO_MODELS: List[StudioModel] = [
         mode="text-to-image",
         price_label="from $0.005/image",
         price_note="Default high 1024x768 is about $0.145/image; varies by size and quality.",
+        credit_note="Credits follow fal/OpenAI image token cost. High quality default is about 14,500 credits.",
         options={"image_sizes": GPT_IMAGE_SIZES, "qualities": GPT_QUALITIES},
         defaults={"image_size": "landscape_4_3", "quality": "high"},
     ),
@@ -161,6 +177,7 @@ STUDIO_MODELS: List[StudioModel] = [
         image_input_field="image_urls",
         price_label="from $0.011/image",
         price_note="Includes one input image; varies by size and quality.",
+        credit_note="Credits follow fal/OpenAI image token cost and selected quality.",
         options={"image_sizes": GPT_EDIT_IMAGE_SIZES, "qualities": GPT_QUALITIES},
         defaults={"image_size": "auto", "quality": "high"},
     ),
@@ -172,8 +189,10 @@ STUDIO_MODELS: List[StudioModel] = [
         requires_image=True,
         image_input_field="image_urls",
         price_label="$0.08/image",
+        credit_note="Base 8,000 credits. 0.5K is cheaper; 2K/4K cost more.",
         options={"aspect_ratios": NANO_IMAGE_ASPECT_RATIOS, "resolutions": NANO_IMAGE_RESOLUTIONS},
         defaults={"aspect_ratio": "auto", "resolution": "1K"},
+        supports_seed=True,
     ),
     StudioModel(
         id="bytedance/seedance-2.0/text-to-video",
@@ -185,6 +204,7 @@ STUDIO_MODELS: List[StudioModel] = [
         options={"aspect_ratios": SEEDANCE_ASPECT_RATIOS, "resolutions": SEEDANCE_RESOLUTIONS, "durations": SEEDANCE_DURATIONS},
         defaults={"aspect_ratio": "auto", "resolution": "720p", "duration": "auto"},
         supports_generate_audio=True,
+        credit_note="Credits are calculated from resolution, aspect ratio, and duration.",
     ),
     StudioModel(
         id="bytedance/seedance-2.0/image-to-video",
@@ -198,6 +218,7 @@ STUDIO_MODELS: List[StudioModel] = [
         options={"aspect_ratios": SEEDANCE_ASPECT_RATIOS, "resolutions": SEEDANCE_RESOLUTIONS, "durations": SEEDANCE_DURATIONS},
         defaults={"aspect_ratio": "auto", "resolution": "720p", "duration": "auto"},
         supports_generate_audio=True,
+        credit_note="Credits are calculated from resolution, aspect ratio, and duration.",
     ),
     StudioModel(
         id="fal-ai/kling-video/v3/pro/image-to-video",
@@ -211,6 +232,7 @@ STUDIO_MODELS: List[StudioModel] = [
         options={"durations": KLING_V3_DURATIONS},
         defaults={"duration": "5"},
         supports_generate_audio=True,
+        credit_note="Credits are calculated per second; audio increases cost.",
     ),
     StudioModel(
         id="fal-ai/kling-video/v2.6/pro/image-to-video",
@@ -224,11 +246,125 @@ STUDIO_MODELS: List[StudioModel] = [
         options={"durations": KLING_V26_DURATIONS},
         defaults={"duration": "5"},
         supports_generate_audio=True,
+        credit_note="Credits are calculated per second; audio increases cost.",
     ),
-    StudioModel(id="fal-ai/minimax/speech-2.8-hd", label="MiniMax Speech 2.8 HD", type="speech", mode="text-to-speech", price_label="$0.10/1K chars"),
-    StudioModel(id="fal-ai/gemini-3.1-flash-tts", label="Gemini 3.1 Flash TTS", type="speech", mode="text-to-speech", price_label="$0.15/1K chars"),
-    StudioModel(id="fal-ai/qwen-3-tts/text-to-speech/1.7b", label="Qwen 3 TTS 1.7B", type="speech", mode="text-to-speech", price_label="$0.09/1K chars"),
+    StudioModel(id="fal-ai/minimax/speech-2.8-hd", label="MiniMax Speech 2.8 HD", type="speech", mode="text-to-speech", price_label="$0.10/1K chars", credit_note="10,000 credits per 1,000 characters."),
+    StudioModel(id="fal-ai/gemini-3.1-flash-tts", label="Gemini 3.1 Flash TTS", type="speech", mode="text-to-speech", price_label="$0.15/1K chars", credit_note="15,000 credits per 1,000 characters."),
+    StudioModel(id="fal-ai/qwen-3-tts/text-to-speech/1.7b", label="Qwen 3 TTS 1.7B", type="speech", mode="text-to-speech", price_label="$0.09/1K chars", credit_note="9,000 credits per 1,000 characters."),
 ]
+
+
+CREDITS_PER_USD = 100000
+GPT_IMAGE_QUALITY_USD = {
+    "low": 0.01,
+    "medium": 0.05,
+    "high": 0.145,
+    "auto": 0.05,
+}
+NANO_RESOLUTION_MULTIPLIERS = {
+    "0.5K": 0.75,
+    "1K": 1.0,
+    "2K": 1.5,
+    "4K": 2.0,
+}
+SEEDANCE_RESOLUTION_SIDES = {
+    "480p": 480,
+    "720p": 720,
+    "1080p": 1080,
+}
+ASPECT_RATIOS = {
+    "21:9": (21, 9),
+    "16:9": (16, 9),
+    "4:3": (4, 3),
+    "1:1": (1, 1),
+    "3:4": (3, 4),
+    "9:16": (9, 16),
+}
+
+
+def credits_from_usd(usd: float) -> int:
+    return max(0, int(round(usd * CREDITS_PER_USD)))
+
+
+def parse_duration(value: Optional[str], default: int = 5) -> int:
+    if not value or value == "auto":
+        return default
+    try:
+        return max(1, int(value))
+    except ValueError:
+        return default
+
+
+def seedance_usd(resolution: str, aspect_ratio: str, duration_value: Optional[str]) -> float:
+    duration_seconds = parse_duration(duration_value)
+    short_side = SEEDANCE_RESOLUTION_SIDES.get(resolution, 720)
+    ratio = ASPECT_RATIOS.get(aspect_ratio if aspect_ratio != "auto" else "16:9", (16, 9))
+    width_ratio, height_ratio = ratio
+    if width_ratio >= height_ratio:
+        height = short_side
+        width = int(short_side * width_ratio / height_ratio)
+    else:
+        width = short_side
+        height = int(short_side * height_ratio / width_ratio)
+    token_rate = 0.014
+    video_tokens = (height * width * duration_seconds * 24) / 1024
+    return (video_tokens / 1000) * token_rate
+
+
+def estimate_studio_cost(model: StudioModel, payload: StudioGenerateRequest) -> tuple[int, float, str, str]:
+    if is_local_image_model(model.id) or model.mode == "local-text-to-image":
+        return 0, 0.0, "0 credits", "Local model uses your machine, not fal balance."
+
+    if model.id.startswith("openai/gpt-image-2"):
+        quality = payload.quality or model.defaults.get("quality") or "high"
+        usd = GPT_IMAGE_QUALITY_USD.get(quality, GPT_IMAGE_QUALITY_USD["medium"])
+        if model.mode == "image-edit":
+            usd = max(usd, 0.011)
+        credits = credits_from_usd(usd)
+        return credits, usd, f"{credits:,} credits", "Estimate follows fal/OpenAI image pricing and selected quality."
+
+    if "nano-banana-2" in model.id:
+        resolution = payload.resolution or model.defaults.get("resolution") or "1K"
+        usd = 0.08 * NANO_RESOLUTION_MULTIPLIERS.get(resolution, 1.0)
+        credits = credits_from_usd(usd)
+        return credits, usd, f"{credits:,} credits", f"Nano Banana 2 {resolution} estimate."
+
+    if "seedance-2.0" in model.id:
+        resolution = payload.resolution or model.defaults.get("resolution") or "720p"
+        aspect_ratio = payload.aspect_ratio or model.defaults.get("aspect_ratio") or "16:9"
+        duration_value = payload.duration or model.defaults.get("duration") or "5"
+        usd = seedance_usd(resolution, aspect_ratio, duration_value)
+        credits = credits_from_usd(usd)
+        return credits, usd, f"{credits:,} credits", f"Seedance {resolution}, {aspect_ratio}, {parse_duration(duration_value)} sec estimate."
+
+    if "kling-video/v3" in model.id:
+        seconds = parse_duration(payload.duration or model.defaults.get("duration"))
+        usd_per_sec = 0.168 if payload.generate_audio is not False else 0.112
+        usd = usd_per_sec * seconds
+        credits = credits_from_usd(usd)
+        return credits, usd, f"{credits:,} credits", f"Kling v3 Pro {seconds} sec estimate."
+
+    if "kling-video/v2.6" in model.id:
+        seconds = parse_duration(payload.duration or model.defaults.get("duration"))
+        usd_per_sec = 0.14 if payload.generate_audio is not False else 0.07
+        usd = usd_per_sec * seconds
+        credits = credits_from_usd(usd)
+        return credits, usd, f"{credits:,} credits", f"Kling v2.6 Pro {seconds} sec estimate."
+
+    if model.type == "speech":
+        chars = max(1, len(payload.prompt or ""))
+        if "gemini" in model.id:
+            usd_per_1k = 0.15
+        elif "qwen" in model.id:
+            usd_per_1k = 0.09
+        else:
+            usd_per_1k = 0.10
+        usd = (chars / 1000) * usd_per_1k
+        credits = max(100, credits_from_usd(usd))
+        return credits, usd, f"{credits:,} credits", f"{chars:,} characters at ${usd_per_1k}/1K chars."
+
+    fallback = TokenManager.media_cost(model.type)
+    return fallback, fallback / CREDITS_PER_USD, f"{fallback:,} credits", "Fallback media estimate."
 
 
 def get_model(model_id: str) -> StudioModel:
@@ -297,7 +433,7 @@ def build_fal_input(model: StudioModel, payload: StudioGenerateRequest, user: Us
         if payload.voice:
             data["voice"] = payload.voice
 
-    if payload.seed is not None:
+    if model.supports_seed and payload.seed is not None:
         data["seed"] = payload.seed
 
     return data
@@ -425,7 +561,7 @@ async def execute_studio_generation_job(generation_id: UUID, user_id: UUID, payl
 
         payload = StudioGenerateRequest(**payload_data)
         model = get_model(payload.model_id)
-        cost = TokenManager.media_cost("local_image" if is_local_image_model(model.id) else model.type)
+        cost, _, _, _ = estimate_studio_cost(model, payload)
 
         generation.result = {"status": "running"}
         db.commit()
@@ -466,6 +602,21 @@ async def execute_studio_generation_job(generation_id: UUID, user_id: UUID, payl
 @router.get("/models", response_model=List[StudioModel])
 async def list_studio_models(current_user: User = Depends(get_current_user)):
     return STUDIO_MODELS
+
+
+@router.post("/cost-estimate", response_model=StudioCostEstimateResponse)
+async def estimate_generation_cost(
+    payload: StudioCostEstimateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    model = get_model(payload.model_id)
+    credits, usd, label, note = estimate_studio_cost(model, payload)
+    return StudioCostEstimateResponse(
+        credits=credits,
+        usd_estimate=round(usd, 6),
+        label=label,
+        note=note,
+    )
 
 
 @router.post("/upload-image", response_model=StudioUploadResponse)
@@ -517,7 +668,7 @@ async def generate_studio_media(
     current_user: User = Depends(get_current_user),
 ):
     model = get_model(payload.model_id)
-    cost = TokenManager.media_cost("local_image" if is_local_image_model(model.id) else model.type)
+    cost, _, _, _ = estimate_studio_cost(model, payload)
     TokenManager.check_balance(current_user, cost)
 
     if is_local_image_model(model.id):

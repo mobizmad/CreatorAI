@@ -37,6 +37,15 @@ interface StudioModel {
   defaults?: Record<string, string>;
   supports_prompt_adherence?: boolean;
   supports_generate_audio?: boolean;
+  supports_seed?: boolean;
+  credit_note?: string;
+}
+
+interface StudioCostEstimate {
+  credits: number;
+  usd_estimate: number;
+  label: string;
+  note: string;
 }
 
 interface StudioMedia {
@@ -91,10 +100,6 @@ function getErrorMessage(detail: any, fallback: string) {
   return detail.message || JSON.stringify(detail);
 }
 
-function modelOptionLabel(model: StudioModel) {
-  return model.price_label ? `${model.label} - ${model.price_label}` : model.label;
-}
-
 function getModelBrand(model?: StudioModel) {
   const id = model?.id.toLowerCase() || '';
   const label = model?.label.toLowerCase() || '';
@@ -106,14 +111,6 @@ function getModelBrand(model?: StudioModel) {
   if (id.includes('minimax') || label.includes('music') || model?.type === 'speech') return { text: '♪', color: 'text-pink-600', bg: 'bg-pink-50' };
   if (id.includes('local') || label.includes('local') || label.includes('stable diffusion')) return { text: '◆', color: 'text-emerald-600', bg: 'bg-emerald-50' };
   return { text: 'M', color: 'text-primary-600', bg: 'bg-primary-50' };
-}
-
-function getModelCreditLabel(model?: StudioModel) {
-  if (!model) return 'select a model';
-  if (model.price_label?.includes('local')) return 'local credits';
-  if (model.type === 'image') return model.mode === 'image-edit' ? '800 credits' : '500 credits';
-  if (model.type === 'video') return '2,000+ credits';
-  return '200 credits';
 }
 
 function ModelMark({ model }: { model?: StudioModel }) {
@@ -171,6 +168,8 @@ export default function AIStudio() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generationStatusMessage, setGenerationStatusMessage] = useState('');
+  const [costEstimate, setCostEstimate] = useState<StudioCostEstimate | null>(null);
+  const [isLoadingCost, setIsLoadingCost] = useState(false);
 
   const filteredModels = useMemo(
     () => models.filter((model) => model.type === selectedType),
@@ -229,6 +228,21 @@ export default function AIStudio() {
     Authorization: `Bearer ${localStorage.getItem('token')}`,
   });
 
+  const buildGenerationPayload = (overridePrompt = prompt) => ({
+    model_id: selectedModel?.id,
+    prompt: overridePrompt,
+    image_url: imageUrl || undefined,
+    quality,
+    image_size: selectedType === 'image' ? imageSize : undefined,
+    aspect_ratio: selectedType === 'image' ? imageAspectRatio : selectedType === 'video' ? aspectRatio : undefined,
+    resolution: selectedType === 'image' ? imageResolution : selectedType === 'video' ? resolution : undefined,
+    duration: selectedType === 'video' ? duration : undefined,
+    generate_audio: selectedType === 'video' && selectedModel?.supports_generate_audio ? generateAudio : undefined,
+    voice: selectedType === 'speech' ? voice || undefined : undefined,
+    seed: selectedModel?.supports_seed && seed ? Number(seed) : undefined,
+    prompt_adherence: selectedType === 'image' && selectedModel?.supports_prompt_adherence ? promptAdherence : undefined,
+  });
+
   const loadModels = async () => {
     try {
       const response = await fetch(`${API}/ai-studio/models`, { headers: authHeaders() });
@@ -254,6 +268,53 @@ export default function AIStudio() {
       setIsLoadingLists(false);
     }
   };
+
+  useEffect(() => {
+    if (!selectedModel) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsLoadingCost(true);
+      try {
+        const response = await fetch(`${API}/ai-studio/cost-estimate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders(),
+          },
+          body: JSON.stringify(buildGenerationPayload(prompt || 'preview')),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error('Failed to estimate cost');
+        setCostEstimate(await response.json());
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          setCostEstimate(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingCost(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    selectedModel?.id,
+    prompt,
+    quality,
+    imageSize,
+    imageAspectRatio,
+    imageResolution,
+    aspectRatio,
+    resolution,
+    duration,
+    generateAudio,
+    voice,
+    seed,
+  ]);
 
   const handleImageUpload = async () => {
     if (!selectedFile || isUploadingImage) return;
@@ -323,20 +384,7 @@ export default function AIStudio() {
           'Content-Type': 'application/json',
           ...authHeaders(),
         },
-        body: JSON.stringify({
-          model_id: selectedModel.id,
-          prompt,
-          image_url: imageUrl || undefined,
-          quality,
-          image_size: selectedType === 'image' ? imageSize : undefined,
-          aspect_ratio: selectedType === 'image' ? imageAspectRatio : selectedType === 'video' ? aspectRatio : undefined,
-          resolution: selectedType === 'image' ? imageResolution : selectedType === 'video' ? resolution : undefined,
-          duration: selectedType === 'video' ? duration : undefined,
-          generate_audio: selectedType === 'video' ? generateAudio : undefined,
-          voice: selectedType === 'speech' ? voice || undefined : undefined,
-          seed: seed ? Number(seed) : undefined,
-          prompt_adherence: selectedType === 'image' ? promptAdherence : undefined,
-        }),
+        body: JSON.stringify(buildGenerationPayload()),
       });
 
       const data = await response.json();
@@ -388,7 +436,13 @@ export default function AIStudio() {
 
   const ActiveIcon = typeIcon;
   const typeLabel = selectedType === 'speech' ? 'music' : selectedType;
-  const selectedModelCreditLabel = getModelCreditLabel(selectedModel);
+  const selectedModelCreditLabel = isLoadingCost ? 'estimating...' : costEstimate?.label || selectedModel?.credit_note || 'select a model';
+  const selectedModelUsdLabel =
+    costEstimate && costEstimate.usd_estimate > 0
+      ? `about $${costEstimate.usd_estimate.toFixed(costEstimate.usd_estimate >= 0.01 ? 3 : 5)} provider cost`
+      : costEstimate
+        ? 'no provider cost'
+        : selectedModel?.price_label;
   const selectedOptions = selectedModel?.options || {};
   const hasImageControls =
     selectedType === 'image' &&
@@ -406,9 +460,10 @@ export default function AIStudio() {
         selectedOptions.durations?.length ||
         selectedModel?.supports_generate_audio
     );
+  const showSeedControl = Boolean(selectedModel?.supports_seed);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#f3efff]">
+    <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900">
       <div className="mx-auto max-w-7xl px-4 py-5 lg:px-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -436,14 +491,14 @@ export default function AIStudio() {
         </div>
 
         {activeTab === 'create' && (
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[440px_1fr]">
-            <section className="rounded-[24px] bg-white p-7 shadow-sm">
-              <div className="mb-7">
-                <h2 className="text-4xl font-bold tracking-tight text-gray-900">AI Studio</h2>
-                <p className="mt-3 text-lg leading-8 text-gray-600">Turn ideas into stunning AI visuals, videos, and music.</p>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[430px_1fr]">
+            <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <div className="mb-5">
+                <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Create Media</h2>
+                <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">Choose the output type, model, and exact settings before spending credits.</p>
               </div>
 
-              <div className="mb-5 grid grid-cols-3 rounded-[22px] bg-gray-100 p-1.5">
+              <div className="mb-5 grid grid-cols-3 rounded-lg bg-gray-100 p-1 dark:bg-gray-900">
                 {(['image', 'video', 'speech'] as StudioType[]).map((type) => {
                   const Icon = type === 'image' ? ImageIcon : type === 'video' ? Play : Music;
                   const label = type === 'speech' ? 'Music' : type[0].toUpperCase() + type.slice(1);
@@ -451,10 +506,10 @@ export default function AIStudio() {
                     <button
                       key={type}
                       onClick={() => setSelectedType(type)}
-                      className={`flex min-h-[54px] items-center justify-center gap-2 rounded-[18px] px-3 py-2 text-base font-medium transition-colors ${
+                      className={`flex min-h-[48px] items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                         selectedType === type
-                          ? 'bg-white text-gray-950 shadow-sm'
-                          : 'text-gray-700 hover:bg-white/60'
+                          ? 'bg-white text-gray-950 shadow-sm dark:bg-gray-700 dark:text-white'
+                          : 'text-gray-700 hover:bg-white/60 dark:text-gray-300 dark:hover:bg-gray-800'
                       }`}
                     >
                       <Icon className="h-5 w-5" />
@@ -465,9 +520,19 @@ export default function AIStudio() {
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                  Generating {selectedType === 'speech' ? 'music/audio' : `a ${typeLabel}`}:
-                  <span className="font-bold text-gray-800"> {selectedModelCreditLabel}</span>
+                <div className="rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-900 dark:border-primary-900/50 dark:bg-primary-950/30 dark:text-primary-100">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">Estimated cost: {selectedModelCreditLabel}</p>
+                      <p className="mt-1 text-xs opacity-80">{selectedModelUsdLabel}</p>
+                    </div>
+                    <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-primary-700 dark:bg-gray-900 dark:text-primary-200">
+                      {selectedType === 'speech' ? 'Audio' : typeLabel}
+                    </span>
+                  </div>
+                  {(costEstimate?.note || selectedModel?.price_note) && (
+                    <p className="mt-2 text-xs opacity-80">{costEstimate?.note || selectedModel?.price_note}</p>
+                  )}
                 </div>
 
                 <div>
@@ -484,19 +549,19 @@ export default function AIStudio() {
                     <button
                       type="button"
                       onClick={() => setIsModelMenuOpen((open) => !open)}
-                      className={`flex min-h-[58px] w-full items-center justify-between rounded-[18px] border bg-white px-4 text-left text-base transition-colors ${
-                        isModelMenuOpen ? 'border-gray-950 ring-2 ring-gray-950/5' : 'border-gray-300 hover:border-gray-500'
+                      className={`flex min-h-[52px] w-full items-center justify-between rounded-lg border bg-white px-4 text-left text-sm transition-colors dark:bg-gray-900 ${
+                        isModelMenuOpen ? 'border-primary-500 ring-2 ring-primary-500/10' : 'border-gray-300 hover:border-gray-500 dark:border-gray-700'
                       }`}
                     >
                       <span className="flex min-w-0 items-center gap-3">
                         <ModelMark model={selectedModel} />
-                        <span className="truncate font-medium text-gray-900">{selectedModel?.label || 'Select model'}</span>
+                        <span className="truncate font-medium text-gray-900 dark:text-white">{selectedModel?.label || 'Select model'}</span>
                       </span>
                       <ChevronDown className={`h-5 w-5 shrink-0 text-gray-500 transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {isModelMenuOpen && (
-                      <div className="absolute left-0 right-0 z-20 mt-2 max-h-[420px] overflow-y-auto rounded-[18px] border border-gray-100 bg-white/95 p-2 shadow-2xl backdrop-blur">
+                      <div className="absolute left-0 right-0 z-20 mt-2 max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
                         {filteredModels.map((model) => (
                           <button
                             key={model.id}
@@ -506,14 +571,14 @@ export default function AIStudio() {
                               setSelectedModelId(model.id);
                               setIsModelMenuOpen(false);
                             }}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${
-                              selectedModel?.id === model.id ? 'bg-gray-100' : 'hover:bg-gray-50'
+                            className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors ${
+                              selectedModel?.id === model.id ? 'bg-primary-50 dark:bg-primary-950/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                             }`}
                           >
                             <ModelMark model={model} />
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-base font-medium text-gray-900">{model.label}</span>
-                              {model.price_label && <span className="block truncate text-xs text-gray-500">{model.price_label}</span>}
+                              <span className="block truncate text-sm font-medium text-gray-900 dark:text-white">{model.label}</span>
+                              {model.credit_note && <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{model.credit_note}</span>}
                             </span>
                           </button>
                         ))}
@@ -531,7 +596,7 @@ export default function AIStudio() {
                     onChange={(event) => setPrompt(event.target.value)}
                     rows={8}
                     placeholder={selectedType === 'speech' ? 'Type the speech text...' : 'Describe the scene you imagine'}
-                    className="w-full resize-none rounded-[18px] border border-gray-300 px-4 py-4 text-base outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-4 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -575,14 +640,17 @@ export default function AIStudio() {
                 )}
 
                 {hasImageControls && (
-                  <div className="rounded-[18px] border border-gray-200 p-4">
+                  <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                     <div className="mb-4 flex items-center gap-2 text-base font-bold text-gray-700">
                       <SlidersHorizontal className="h-5 w-5" />
-                      Advanced Setting
+                      Advanced Settings
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {selectedOptions.image_sizes?.length ? (
                       <SelectField label="Size" value={imageSize} onChange={setImageSize} options={selectedOptions.image_sizes} />
+                    ) : null}
+                    {selectedOptions.qualities?.length ? (
+                      <SelectField label="Quality" value={quality} onChange={setQuality} options={selectedOptions.qualities} />
                     ) : null}
                     {selectedOptions.aspect_ratios?.length ? (
                       <SelectField label="Aspect" value={imageAspectRatio} onChange={setImageAspectRatio} options={selectedOptions.aspect_ratios} />
@@ -598,10 +666,10 @@ export default function AIStudio() {
                 )}
 
                 {hasVideoControls && (
-                  <div className="rounded-[18px] border border-gray-200 p-4">
+                  <div className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
                     <div className="mb-4 flex items-center gap-2 text-base font-bold text-gray-700">
                       <SlidersHorizontal className="h-5 w-5" />
-                      Advanced Setting
+                      Advanced Settings
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {selectedOptions.aspect_ratios?.length ? (
@@ -657,6 +725,7 @@ export default function AIStudio() {
                   </div>
                 ) : null}
 
+                {showSeedControl && (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Seed</label>
                   <div className="flex gap-2">
@@ -675,19 +744,20 @@ export default function AIStudio() {
                     </button>
                   </div>
                 </div>
+                )}
 
                 {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
                 <button
                   onClick={handleGenerate}
                   disabled={isLoading || !prompt.trim() || !selectedModel}
-                  className="flex min-h-[64px] w-full items-center justify-center gap-3 rounded-full bg-gray-100 px-5 text-xl font-bold text-gray-700 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-h-[56px] w-full items-center justify-center gap-3 rounded-lg bg-primary-500 px-5 text-base font-semibold text-white hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                   {isLoading ? 'Generating...' : (
                     <>
                       Generate
-                      <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-gray-600">{selectedModelCreditLabel}</span>
+                      <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">{selectedModelCreditLabel}</span>
                     </>
                   )}
                 </button>
