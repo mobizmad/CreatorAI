@@ -29,6 +29,9 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentbuilder
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       FAL_KEY: ${FAL_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
       OLLAMA_ENDPOINT: http://host.docker.internal:11434
       LOCAL_IMAGE_MODEL_ID: ${LOCAL_IMAGE_MODEL_ID:-stabilityai/stable-diffusion-3.5-medium}
       LOCAL_IMAGE_SERVICE_URL: ${LOCAL_IMAGE_SERVICE_URL:-http://host.docker.internal:8002}

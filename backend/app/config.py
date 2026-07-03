@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # OpenAI (Required for embeddings and GPT models)
     OPENAI_API_KEY: Optional[str] = None
     FAL_KEY: Optional[str] = None
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+    STRIPE_CURRENCY: str = "usd"
     LOCAL_IMAGE_MODEL_ID: str = "stabilityai/stable-diffusion-3.5-medium"
     LOCAL_IMAGE_SERVICE_URL: str = "http://localhost:8002"
     LOCAL_IMAGE_SERVICE_TIMEOUT: float = 600.0

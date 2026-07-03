@@ -600,14 +600,13 @@ async def execute_studio_generation_job(generation_id: UUID, user_id: UUID, payl
 
 
 @router.get("/models", response_model=List[StudioModel])
-async def list_studio_models(current_user: User = Depends(get_current_user)):
+async def list_studio_models():
     return STUDIO_MODELS
 
 
 @router.post("/cost-estimate", response_model=StudioCostEstimateResponse)
 async def estimate_generation_cost(
     payload: StudioCostEstimateRequest,
-    current_user: User = Depends(get_current_user),
 ):
     model = get_model(payload.model_id)
     credits, usd, label, note = estimate_studio_cost(model, payload)

@@ -50,6 +50,15 @@ interface MarketplaceAgent {
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
 const MARKETPLACE_CATEGORIES = ['All', 'General', 'Support', 'Education', 'HR', 'Sales', 'Legal', 'Finance', 'Medical', 'Creative'];
 
+function getApiError(data: any, fallback: string) {
+  if (!data?.detail) return fallback;
+  if (typeof data.detail === 'string') return data.detail;
+  if (Array.isArray(data.detail)) {
+    return data.detail.map((item: any) => item?.msg || item?.message || JSON.stringify(item)).join(', ');
+  }
+  return data.detail.message || fallback;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -229,10 +238,14 @@ export default function Dashboard() {
 }
 
 function PremiumView({ currentUser }: { currentUser: User | null }) {
+  const searchParams = useSearchParams();
   const [calculatorMode, setCalculatorMode] = useState<'chat' | 'image' | 'video' | 'speech'>('chat');
   const [calculatorProvider, setCalculatorProvider] = useState<'ollama' | 'openai'>('ollama');
   const [inputChars, setInputChars] = useState(1200);
   const [outputChars, setOutputChars] = useState(1200);
+  const [checkoutMessage, setCheckoutMessage] = useState('');
+  const [checkoutError, setCheckoutError] = useState('');
+  const [isStartingCheckout, setIsStartingCheckout] = useState<string | null>(null);
 
   const packages = [
     {
@@ -281,8 +294,62 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
     { label: 'Media generation', cost: 'Image, video, and speech use fixed credits per generation.' },
   ];
 
-  const handlePackageAction = (plan: string) => {
-    window.alert(`${plan} checkout is ready to connect. Next step: choose Stripe, manual payment, or your own payment API.`);
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    const checkoutSuccess = searchParams.get('checkout_success');
+    if (!sessionId || checkoutSuccess !== '1') return;
+
+    const confirmCheckout = async () => {
+      setCheckoutMessage('Confirming Stripe payment...');
+      setCheckoutError('');
+      try {
+        const response = await fetch(`${API}/billing/checkout/confirm?session_id=${encodeURIComponent(sessionId)}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(getApiError(data, 'Could not confirm Stripe payment.'));
+        setCheckoutMessage(
+          data.status === 'already_confirmed'
+            ? 'This Stripe payment was already confirmed.'
+            : `Payment confirmed. Added ${Number(data.credits_added || 0).toLocaleString()} credits.`
+        );
+      } catch (err: any) {
+        setCheckoutError(err.message || 'Could not confirm Stripe payment.');
+        setCheckoutMessage('');
+      }
+    };
+
+    confirmCheckout();
+  }, [searchParams]);
+
+  const handlePackageAction = async (plan: string) => {
+    if (plan === 'Free') return;
+    setIsStartingCheckout(plan);
+    setCheckoutError('');
+    setCheckoutMessage('');
+    try {
+      const origin = window.location.origin;
+      const response = await fetch(`${API}/billing/checkout/session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          plan_name: plan,
+          success_url: `${origin}/dashboard?view=premium&checkout_success=1&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/dashboard?view=premium&checkout_cancel=1`,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(getApiError(data, 'Could not start Stripe Checkout.'));
+      window.location.href = data.url;
+    } catch (err: any) {
+      setCheckoutError(err.message || 'Could not start Stripe Checkout.');
+    } finally {
+      setIsStartingCheckout(null);
+    }
   };
 
   const chatEstimatedTokens = Math.max(1, Math.floor((inputChars + outputChars) / 4));
@@ -315,7 +382,7 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
               </p>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">credits available</p>
               <button
-                onClick={() => handlePackageAction('Premium')}
+                onClick={() => handlePackageAction('Pro')}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-400 via-pink-500 to-sky-400 px-4 py-3 text-sm font-bold text-white shadow-sm"
               >
                 <Sparkles className="h-4 w-4" />
@@ -324,6 +391,18 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
             </div>
           </div>
         </div>
+
+        {(checkoutMessage || checkoutError || searchParams.get('checkout_cancel') === '1') && (
+          <div className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
+            checkoutError
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : searchParams.get('checkout_cancel') === '1'
+                ? 'border-yellow-200 bg-yellow-50 text-yellow-800'
+                : 'border-green-200 bg-green-50 text-green-700'
+          }`}>
+            {checkoutError || checkoutMessage || 'Stripe checkout was canceled.'}
+          </div>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-4">
           {packages.map((item) => (
@@ -344,9 +423,11 @@ function PremiumView({ currentUser }: { currentUser: User | null }) {
               <p className="mt-3 min-h-[48px] text-sm leading-6 text-gray-600 dark:text-gray-400">{item.note}</p>
               <button
                 onClick={() => handlePackageAction(item.name)}
-                className={`mt-5 w-full rounded-lg px-4 py-3 text-sm font-bold ${item.popular ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'}`}
+                disabled={item.name === 'Free' || isStartingCheckout === item.name}
+                className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${item.popular ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'}`}
               >
-                {item.button}
+                {isStartingCheckout === item.name && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isStartingCheckout === item.name ? 'Opening Stripe...' : item.button}
               </button>
               <div className="mt-5 space-y-3 border-t border-gray-100 pt-5 dark:border-gray-800">
                 {item.features.map((feature) => (
