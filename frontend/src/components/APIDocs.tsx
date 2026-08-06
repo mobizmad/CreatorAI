@@ -12,7 +12,7 @@ export default function APIDocs({ agentId, agentName }: APIDocsProps) {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<'curl' | 'python' | 'javascript'>('curl');
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
   const baseUrl = apiUrl.replace('/agents', '');
 
   const copyToClipboard = (text: string, section: string) => {

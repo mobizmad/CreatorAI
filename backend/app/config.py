@@ -4,7 +4,7 @@ from typing import Optional, List
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "AgentBuilder"
+    APP_NAME: str = "CreatorAI"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 

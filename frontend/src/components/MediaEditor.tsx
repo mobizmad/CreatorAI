@@ -92,7 +92,7 @@ interface StudioModel {
   supports_generate_audio?: boolean;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const PIXELS_PER_SECOND = 20;
 
 const defaultTracks = (): TimelineTrack[] => [

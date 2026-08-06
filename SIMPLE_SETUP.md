@@ -1,6 +1,6 @@
-# 🚀 Simple Setup Guide for AgentBuilder
+# 🚀 Simple Setup Guide for CreatorAI
 
-This is the **simplest** way to get AgentBuilder running!
+This is the **simplest** way to get CreatorAI running!
 
 ## What You Need
 
@@ -38,7 +38,7 @@ abc123xyz789_ThisIsMySecretKey_ChangeMe_456def
 ### 3️⃣ Set Up Environment
 
 ```bash
-cd AgentBuilder
+cd CreatorAI
 
 # Copy the example file
 cp .env.example .env
@@ -151,7 +151,7 @@ ollama pull llama3.2
 
 ### Create Agent with Ollama
 
-In AgentBuilder:
+In CreatorAI:
 1. Create new agent
 2. Select **"Ollama"** as provider
 3. Enter model: **llama3.2**

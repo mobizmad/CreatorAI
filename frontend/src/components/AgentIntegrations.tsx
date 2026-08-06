@@ -40,7 +40,7 @@ interface DraftIntegration {
   is_active: boolean;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 const PROVIDERS: Array<{
   id: Provider;

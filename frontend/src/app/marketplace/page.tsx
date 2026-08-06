@@ -123,7 +123,7 @@ function AgentDetailModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [copied, setCopied] = useState(false);
-  const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
   useEffect(() => {
     fetch(`${API}/marketplace/${agent.id}/reviews`)
@@ -342,7 +342,7 @@ export default function MarketplacePage() {
   const [sortBy, setSortBy] = useState('newest');
   const [selectedAgent, setSelectedAgent] = useState<MarketplaceAgent | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
   useEffect(() => { setToken(localStorage.getItem('token')); }, []);
 

@@ -32,7 +32,7 @@ interface AttachedFile {
 
 const STORAGE_KEY = 'agentbuilder_default_chat_sessions';
 const ATTACHMENT_HISTORY_KEY = 'agentbuilder_default_chat_attachments';
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const CHAT_MODELS = [
   { label: 'Free gemma4', provider: 'ollama', model: 'gemma4:latest', isFree: true },
   { label: 'Free llama3.2 3B', provider: 'ollama', model: 'llama3.2:3b', isFree: true },
@@ -920,7 +920,7 @@ export default function DefaultChatInterface() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message AgentBuilder..."
+              placeholder="Message CreatorAI..."
               rows={1}
               disabled={isLoading}
               className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent border-0 px-3 py-2 text-sm outline-none focus:ring-0 dark:text-white"

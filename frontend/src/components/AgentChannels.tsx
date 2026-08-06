@@ -61,7 +61,7 @@ interface AgentIntegration {
   fallback_message?: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const providers: Provider[] = ['all', 'line', 'telegram', 'facebook'];
 
 const authHeaders = () => ({

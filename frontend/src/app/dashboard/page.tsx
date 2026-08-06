@@ -42,7 +42,7 @@ interface MarketplaceAgent {
   owner_email: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 const MARKETPLACE_CATEGORIES = ['All', 'General', 'Support', 'Education', 'HR', 'Sales', 'Legal', 'Finance', 'Medical', 'Creative'];
 
 export default function Dashboard() {

@@ -23,7 +23,7 @@ export default function WidgetPage() {
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://aicreateback.ibechamp.com";
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
   // Load agent config (name, description only — no secrets)
   useEffect(() => {
@@ -165,7 +165,7 @@ export default function WidgetPage() {
             Send
           </button>
         </div>
-        <p className="text-center text-xs text-gray-300 mt-2">Powered by AgentBuilder</p>
+        <p className="text-center text-xs text-gray-300 mt-2">Powered by CreatorAI</p>
       </div>
     </div>
   );

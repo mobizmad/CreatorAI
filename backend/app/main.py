@@ -17,12 +17,12 @@ from app.services.rate_limiter import init_rate_limiter
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     # Startup
-    print("🚀 Starting AgentBuilder API...")
+    print("Starting CreatorAI API...")
     init_db()
     print("✅ Database initialized")
     yield
     # Shutdown
-    print("👋 Shutting down AgentBuilder API...")
+    print("Shutting down CreatorAI API...")
 
 
 app = FastAPI(
@@ -71,7 +71,7 @@ app.include_router(integrations.router)
 async def root():
     """Root endpoint"""
     return {
-        "message": "Welcome to AgentBuilder API",
+        "message": "Welcome to CreatorAI API",
         "version": settings.APP_VERSION,
         "docs": "/docs",
     }

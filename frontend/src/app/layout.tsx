@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'AgentBuilder - Build Custom LLM Agents',
+  title: 'CreatorAI - Build Custom LLM Agents',
   description: 'Create, train, and refine your own custom LLM agents with no code',
 };
 

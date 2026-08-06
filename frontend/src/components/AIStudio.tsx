@@ -76,7 +76,7 @@ interface StudioGenerationJob {
   error?: string | null;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://aicreateback.ibechamp.com';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 function getErrorMessage(detail: any, fallback: string) {
   if (!detail) return fallback;

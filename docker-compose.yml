@@ -37,7 +37,7 @@ services:
       HF_HOME: /app/.cache/huggingface
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8001}
-      CORS_ORIGINS: "https://aicreate.ibechamp.com,http://localhost:3001"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
     ports:
       - "8001:8001"
     volumes:

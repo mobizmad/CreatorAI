@@ -222,5 +222,5 @@ async def api_health():
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "api": "AgentBuilder Public API",
+        "api": "CreatorAI Public API",
     }

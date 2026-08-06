@@ -47,7 +47,7 @@ class DefaultChatAttachmentResponse(BaseModel):
     chunk_count: int
 
 
-DEFAULT_SYSTEM_PROMPT = """You are AgentBuilder's default AI assistant.
+DEFAULT_SYSTEM_PROMPT = """You are CreatorAI's default AI assistant.
 Answer clearly and helpfully. When a request benefits from structure, use concise sections with useful headings.
 If the user asks about creating or managing agents, explain how to use the Create Agent area without pretending to take actions outside this chat."""
 
