@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: agentbuilder-postgres
+    container_name: creatorai-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -24,7 +24,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: agentbuilder-backend
+    container_name: creatorai-backend
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/agentbuilder
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -54,7 +54,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: agentbuilder-frontend
+    container_name: creatorai-frontend
     environment:
       NEXT_PUBLIC_API_URL: "http://localhost:8001"
     ports:

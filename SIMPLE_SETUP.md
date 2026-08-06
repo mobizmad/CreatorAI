@@ -63,7 +63,7 @@ Wait 30-60 seconds... ☕
 
 ### 5️⃣ Open Your Browser
 
-Go to: **http://localhost:3000**
+Go to: **http://localhost:3001**
 
 ---
 
@@ -93,7 +93,7 @@ Want to use your agent in another app, website, or system?
 
 ```bash
 # Chat with your agent from anywhere!
-curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
+curl -X POST "http://localhost:8001/v1/agents/YOUR_AGENT_ID/chat" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ab_YOUR_KEY_HERE" \
   -d '{"message": "Hello!"}'
@@ -104,7 +104,7 @@ curl -X POST "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat" \
 import requests
 
 response = requests.post(
-    "http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat",
+    "http://localhost:8001/v1/agents/YOUR_AGENT_ID/chat",
     headers={"X-API-Key": "ab_YOUR_KEY"},
     json={"message": "Hello!"}
 )
@@ -113,7 +113,7 @@ print(response.json()["response"])
 
 **JavaScript:**
 ```javascript
-const res = await fetch("http://localhost:8000/v1/agents/YOUR_AGENT_ID/chat", {
+const res = await fetch("http://localhost:8001/v1/agents/YOUR_AGENT_ID/chat", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -126,7 +126,7 @@ console.log(data.response);
 ```
 
 > 💡 Find your Agent ID in the URL when you open your agent:
-> `http://localhost:3000/agents/THIS-IS-YOUR-AGENT-ID/playground`
+> `http://localhost:3001/agents/THIS-IS-YOUR-AGENT-ID/playground`
 
 ---
 
@@ -171,7 +171,7 @@ In CreatorAI:
 - Try: `docker-compose restart`
 
 ### "Port already in use"
-- Something is running on port 3000 or 8000
+- Something is running on port 3001 or 8001
 - Stop other apps or change ports in `docker-compose.yml`
 
 ### "Invalid API key" (Public API)

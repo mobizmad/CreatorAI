@@ -11,6 +11,14 @@ It combines a `Next.js` frontend with a `FastAPI` backend and supports workflows
 - browsing agent templates and marketplace-style experiences
 - experimenting with local or hosted model backends
 
+## Highlights
+
+- full-stack AI product architecture with `FastAPI` and `Next.js`
+- custom agent creation, chat, and document-based workflows
+- public API support for integrating agents into external apps
+- local model support through `Ollama`
+- modular foundation for marketplace, tooling, and media features
+
 ## Stack
 
 - Frontend: `Next.js`, `React`, `TypeScript`, `Tailwind CSS`
@@ -25,6 +33,16 @@ It combines a `Next.js` frontend with a `FastAPI` backend and supports workflows
 - `docker-compose.yml` - local development stack
 - `SIMPLE_SETUP.md` - quick start guide
 
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["Next.js Frontend"] --> API["FastAPI Backend"]
+    API --> DB["PostgreSQL"]
+    API --> Files["Document Uploads / Vector Stores"]
+    API --> Models["OpenAI or Ollama"]
+```
+
 ## Quick Start
 
 1. Copy the example environment files.
@@ -38,4 +56,4 @@ See [SIMPLE_SETUP.md](./SIMPLE_SETUP.md) for the fastest setup path.
 
 - This repository is intended as a portfolio and development project.
 - Example environment files are included, but real secrets are not committed.
-- If you make the repository public, review integrations and deployment settings before sharing production infrastructure details.
+- Public-facing defaults have been cleaned to avoid exposing private deployment endpoints.
